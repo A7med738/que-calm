@@ -3,8 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
-import { ArrowLeft, Users, Clock, User, SkipForward, CheckCircle, Settings, Stethoscope, Bell, Eye, Phone, Mail, Calendar, Wifi, WifiOff, RefreshCw } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
+import { ArrowLeft, Users, Clock, User, SkipForward, CheckCircle, Settings, Stethoscope, Bell, Eye, Phone, Mail, Calendar, Wifi, WifiOff, RefreshCw, Plus, X, Trash2, AlertTriangle, Zap, RotateCcw } from "lucide-react";
 import ServicesManagement from "@/components/clinic/ServicesManagement";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useClinicBookings } from "@/hooks/useClinicBookings";
@@ -40,7 +46,32 @@ const ClinicDashboard = () => {
   const [selectedDoctorQueue, setSelectedDoctorQueue] = useState<DoctorQueue | null>(null);
   const [doctorQueuePatients, setDoctorQueuePatients] = useState<DoctorQueuePatient[]>([]);
   const [loadingDoctorQueuePatients, setLoadingDoctorQueuePatients] = useState(false);
+  const [showAddPatientDialog, setShowAddPatientDialog] = useState(false);
+  const [manualPatientData, setManualPatientData] = useState({
+    patientName: '',
+    patientPhone: '',
+    doctorId: '',
+    serviceId: '',
+    notes: ''
+  });
+  const [availableServices, setAvailableServices] = useState<any[]>([]);
+  const [loadingServices, setLoadingServices] = useState(false);
+  const [showEmergencyDialog, setShowEmergencyDialog] = useState(false);
+  const [showDelayDialog, setShowDelayDialog] = useState(false);
+  const [emergencyPatientData, setEmergencyPatientData] = useState({
+    patientName: '',
+    patientPhone: '',
+    doctorId: '',
+    serviceId: '',
+    notes: ''
+  });
+  const [delayData, setDelayData] = useState({
+    doctorId: '',
+    delayMinutes: 15,
+    reason: ''
+  });
   const navigate = useNavigate();
+  const { toast } = useToast();
   
   
   // Get notifications for the current user (medical center owner)
@@ -70,7 +101,13 @@ const ClinicDashboard = () => {
     getDoctorQueuePatients,
     callNextPatient,
     skipPatient,
-    completePatient
+    completePatient,
+    reorganizeQueue,
+    cancelBookingAndReorganize,
+    addManualPatient,
+    addEmergencyPatient,
+    setDoctorDelay,
+    reorderQueue
   } = useDoctorQueues(clinicSession?.medical_center?.id || '');
 
   // Fetch completed count when medical center ID is available (with debouncing)
@@ -83,6 +120,36 @@ const ClinicDashboard = () => {
       return () => clearTimeout(timeout);
     }
   }, [clinicSession?.medical_center?.id, getCompletedCount]);
+
+  // جلب الخدمات المتاحة للمريض اليدوي
+  useEffect(() => {
+    const fetchServices = async () => {
+      if (!clinicSession?.medical_center?.id) return;
+      
+      setLoadingServices(true);
+      try {
+        const { data, error } = await supabase
+          .from('services')
+          .select('id, name, price, doctor_name, doctor_specialty')
+          .eq('medical_center_id', clinicSession.medical_center.id)
+          .eq('is_active', true)
+          .order('name');
+
+        if (error) {
+          console.error('Error fetching services:', error);
+          return;
+        }
+
+        setAvailableServices(data || []);
+      } catch (err) {
+        console.error('Error fetching services:', err);
+      } finally {
+        setLoadingServices(false);
+      }
+    };
+
+    fetchServices();
+  }, [clinicSession?.medical_center?.id]);
 
   // Monitor realtime connection status
   useEffect(() => {
@@ -206,6 +273,174 @@ const ClinicDashboard = () => {
       }
     } catch (error) {
       console.error('Error completing patient:', error);
+    }
+  };
+
+  // إلغاء حجز وإعادة تنظيم الطابور
+  const handleCancelBooking = async (bookingId: string) => {
+    try {
+      await cancelBookingAndReorganize(bookingId);
+      toast({
+        title: "تم الإلغاء",
+        description: "تم إلغاء الحجز وإعادة تنظيم الطابور بنجاح",
+      });
+      // Refresh the selected doctor queue
+      if (selectedDoctorQueue) {
+        await handleSelectDoctorQueue(selectedDoctorQueue);
+      }
+    } catch (error) {
+      console.error('Error cancelling booking:', error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إلغاء الحجز",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // إضافة مريض يدوياً
+  const handleAddManualPatient = async () => {
+    if (!manualPatientData.patientName || !manualPatientData.patientPhone || !manualPatientData.doctorId || !manualPatientData.serviceId) {
+      toast({
+        title: "بيانات ناقصة",
+        description: "يرجى ملء جميع الحقول المطلوبة",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await addManualPatient(manualPatientData);
+      toast({
+        title: "تم الإضافة",
+        description: `تم إضافة المريض ${manualPatientData.patientName} بنجاح`,
+      });
+      
+      // إعادة تعيين النموذج
+      setManualPatientData({
+        patientName: '',
+        patientPhone: '',
+        doctorId: '',
+        serviceId: '',
+        notes: ''
+      });
+      setShowAddPatientDialog(false);
+      
+      // تحديث الطابور المحدد
+      if (selectedDoctorQueue) {
+        await handleSelectDoctorQueue(selectedDoctorQueue);
+      }
+    } catch (error) {
+      console.error('Error adding manual patient:', error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إضافة المريض",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // تحديث بيانات المريض اليدوي عند تغيير الخدمة
+  const handleServiceChange = (serviceId: string) => {
+    const selectedService = availableServices.find(s => s.id === serviceId);
+    if (selectedService) {
+      // البحث عن الطبيب المناسب لهذه الخدمة
+      const doctorQueue = doctorQueues.find(dq => dq.doctor_name === selectedService.doctor_name);
+      setManualPatientData(prev => ({
+        ...prev,
+        serviceId,
+        doctorId: doctorQueue?.doctor_id || ''
+      }));
+    }
+  };
+
+  // إضافة مريض طارئ
+  const handleAddEmergencyPatient = async () => {
+    if (!emergencyPatientData.patientName || !emergencyPatientData.patientPhone || !emergencyPatientData.doctorId || !emergencyPatientData.serviceId) {
+      toast({
+        title: "بيانات ناقصة",
+        description: "يرجى ملء جميع الحقول المطلوبة للحالة الطارئة",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await addEmergencyPatient(emergencyPatientData);
+      toast({
+        title: "تم إضافة الحالة الطارئة",
+        description: `تم إضافة ${emergencyPatientData.patientName} كحالة طارئة بنجاح`,
+      });
+      
+      // إعادة تعيين النموذج
+      setEmergencyPatientData({
+        patientName: '',
+        patientPhone: '',
+        doctorId: '',
+        serviceId: '',
+        notes: ''
+      });
+      setShowEmergencyDialog(false);
+      
+      // تحديث الطابور المحدد
+      if (selectedDoctorQueue) {
+        await handleSelectDoctorQueue(selectedDoctorQueue);
+      }
+    } catch (error) {
+      console.error('Error adding emergency patient:', error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إضافة الحالة الطارئة",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // تعيين تأخير للطبيب
+  const handleSetDoctorDelay = async () => {
+    if (!delayData.doctorId || !delayData.reason) {
+      toast({
+        title: "بيانات ناقصة",
+        description: "يرجى اختيار الطبيب وكتابة سبب التأخير",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await setDoctorDelay(delayData.doctorId, delayData.delayMinutes, delayData.reason);
+      toast({
+        title: "تم تعيين التأخير",
+        description: `تم إشعار المرضى بتأخير الطبيب ${delayData.delayMinutes} دقيقة`,
+      });
+      
+      // إعادة تعيين النموذج
+      setDelayData({
+        doctorId: '',
+        delayMinutes: 15,
+        reason: ''
+      });
+      setShowDelayDialog(false);
+    } catch (error) {
+      console.error('Error setting doctor delay:', error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تعيين التأخير",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // تحديث بيانات المريض الطارئ عند تغيير الخدمة
+  const handleEmergencyServiceChange = (serviceId: string) => {
+    const selectedService = availableServices.find(s => s.id === serviceId);
+    if (selectedService) {
+      const doctorQueue = doctorQueues.find(dq => dq.doctor_name === selectedService.doctor_name);
+      setEmergencyPatientData(prev => ({
+        ...prev,
+        serviceId,
+        doctorId: doctorQueue?.doctor_id || ''
+      }));
     }
   };
 
@@ -352,22 +587,51 @@ const ClinicDashboard = () => {
           {selectedTab === "queue" && (
             <div className="space-y-4 sm:space-y-6">
 
-              {/* Refresh Button */}
+              {/* Header with Actions */}
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-semibold">طوابير الأطباء</h2>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    refetchDoctorQueues();
-                    refetch();
-                  }}
-                  disabled={doctorQueuesLoading || bookingsLoading}
-                  className="flex items-center gap-2"
-                >
-                  <RefreshCw className={`h-4 w-4 ${(doctorQueuesLoading || bookingsLoading) ? 'animate-spin' : ''}`} />
-                  تحديث
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setShowEmergencyDialog(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <AlertTriangle className="h-4 w-4" />
+                    حالة طارئة
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowDelayDialog(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <Clock className="h-4 w-4" />
+                    تأخير طبيب
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAddPatientDialog(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    إضافة مريض
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      refetchDoctorQueues();
+                      refetch();
+                    }}
+                    disabled={doctorQueuesLoading || bookingsLoading}
+                    className="flex items-center gap-2"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${(doctorQueuesLoading || bookingsLoading) ? 'animate-spin' : ''}`} />
+                    تحديث
+                  </Button>
+                </div>
               </div>
 
               {/* Doctor Queues Overview */}
@@ -502,13 +766,32 @@ const ClinicDashboard = () => {
                             .filter(p => p.status === 'pending' || p.status === 'confirmed')
                             .sort((a, b) => a.queue_number - b.queue_number)
                             .map((patient, index) => (
-                            <div key={patient.booking_id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                            <div key={patient.booking_id} className={`flex items-center justify-between p-3 rounded-lg ${
+                              patient.queue_number === 0 || patient.notes?.includes('حالة طارئة -')
+                                ? 'bg-red-50 border border-red-200' 
+                                : 'bg-muted/30'
+                            }`}>
                               <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                                  <span className="font-bold text-primary text-sm">{patient.queue_number}</span>
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                  patient.queue_number === 0 || patient.notes?.includes('حالة طارئة -')
+                                    ? 'bg-red-100' 
+                                    : 'bg-primary/10'
+                                }`}>
+                                  {patient.queue_number === 0 || patient.notes?.includes('حالة طارئة -') ? (
+                                    <span className="text-red-600 text-lg">🚨</span>
+                                  ) : (
+                                    <span className="font-bold text-primary text-sm">{patient.queue_number}</span>
+                                  )}
                                 </div>
                                 <div>
-                                  <p className="font-semibold text-sm">{patient.patient_name}</p>
+                                  <p className="font-semibold text-sm flex items-center gap-2">
+                                    {patient.patient_name}
+                                    {(patient.queue_number === 0 || patient.notes?.includes('حالة طارئة -')) && (
+                                      <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full">
+                                        طارئ
+                                      </span>
+                                    )}
+                                  </p>
                                   <p className="text-xs text-muted-foreground">{patient.service_name}</p>
                                   <p className="text-xs text-muted-foreground">{patient.booking_time}</p>
                                 </div>
@@ -532,6 +815,35 @@ const ClinicDashboard = () => {
                                   <Eye className="h-4 w-4 mr-1" />
                                   تفاصيل
                                 </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    >
+                                      <X className="h-4 w-4 mr-1" />
+                                      إلغاء
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>تأكيد الإلغاء</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        هل أنت متأكد من إلغاء حجز {patient.patient_name}؟ سيتم إعادة تنظيم الطابور تلقائياً.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                                      <AlertDialogAction 
+                                        onClick={() => handleCancelBooking(patient.booking_id)}
+                                        className="bg-red-600 hover:bg-red-700"
+                                      >
+                                        تأكيد الإلغاء
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
                               </div>
                             </div>
                           ))}
@@ -789,6 +1101,224 @@ const ClinicDashboard = () => {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Manual Patient Dialog */}
+      <Dialog open={showAddPatientDialog} onOpenChange={setShowAddPatientDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>إضافة مريض يدوياً</DialogTitle>
+            <DialogDescription>
+              إضافة مريض جديد إلى الطابور مباشرة من المركز
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="patientName">اسم المريض *</Label>
+              <Input
+                id="patientName"
+                value={manualPatientData.patientName}
+                onChange={(e) => setManualPatientData(prev => ({ ...prev, patientName: e.target.value }))}
+                placeholder="أدخل اسم المريض"
+              />
+            </div>
+            <div>
+              <Label htmlFor="patientPhone">رقم الهاتف *</Label>
+              <Input
+                id="patientPhone"
+                value={manualPatientData.patientPhone}
+                onChange={(e) => setManualPatientData(prev => ({ ...prev, patientPhone: e.target.value }))}
+                placeholder="أدخل رقم الهاتف"
+                type="tel"
+              />
+            </div>
+            <div>
+              <Label htmlFor="service">الخدمة *</Label>
+              <Select value={manualPatientData.serviceId} onValueChange={handleServiceChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر الخدمة" />
+                </SelectTrigger>
+                <SelectContent>
+                  {loadingServices ? (
+                    <SelectItem value="" disabled>جاري التحميل...</SelectItem>
+                  ) : availableServices.length === 0 ? (
+                    <SelectItem value="" disabled>لا توجد خدمات متاحة</SelectItem>
+                  ) : (
+                    availableServices.map((service) => (
+                      <SelectItem key={service.id} value={service.id}>
+                        {service.name} - {service.doctor_name} ({service.price} ريال)
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="notes">ملاحظات (اختياري)</Label>
+              <Textarea
+                id="notes"
+                value={manualPatientData.notes}
+                onChange={(e) => setManualPatientData(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="أي ملاحظات إضافية..."
+                rows={3}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => setShowAddPatientDialog(false)}
+              >
+                إلغاء
+              </Button>
+              <Button
+                onClick={handleAddManualPatient}
+                disabled={!manualPatientData.patientName || !manualPatientData.patientPhone || !manualPatientData.serviceId}
+              >
+                إضافة المريض
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Emergency Patient Dialog */}
+      <Dialog open={showEmergencyDialog} onOpenChange={setShowEmergencyDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              إضافة حالة طارئة
+            </DialogTitle>
+            <DialogDescription>
+              إضافة مريض بحالة طارئة يحتاج أولوية في الطابور
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="emergency-patient-name">اسم المريض *</Label>
+              <Input
+                id="emergency-patient-name"
+                value={emergencyPatientData.patientName}
+                onChange={(e) => setEmergencyPatientData(prev => ({ ...prev, patientName: e.target.value }))}
+                placeholder="اسم المريض"
+              />
+            </div>
+            <div>
+              <Label htmlFor="emergency-patient-phone">رقم الهاتف *</Label>
+              <Input
+                id="emergency-patient-phone"
+                value={emergencyPatientData.patientPhone}
+                onChange={(e) => setEmergencyPatientData(prev => ({ ...prev, patientPhone: e.target.value }))}
+                placeholder="رقم الهاتف"
+              />
+            </div>
+            <div>
+              <Label htmlFor="emergency-service">الخدمة *</Label>
+              <Select onValueChange={handleEmergencyServiceChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر الخدمة" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableServices.map((service) => (
+                    <SelectItem key={service.id} value={service.id}>
+                      {service.name} - {service.doctor_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="emergency-notes">ملاحظات إضافية</Label>
+              <Textarea
+                id="emergency-notes"
+                value={emergencyPatientData.notes}
+                onChange={(e) => setEmergencyPatientData(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="وصف الحالة الطارئة..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEmergencyDialog(false)}>
+              إلغاء
+            </Button>
+            <Button 
+              onClick={handleAddEmergencyPatient}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              إضافة حالة طارئة
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Doctor Delay Dialog */}
+      <Dialog open={showDelayDialog} onOpenChange={setShowDelayDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-orange-600" />
+              تعيين تأخير للطبيب
+            </DialogTitle>
+            <DialogDescription>
+              إشعار المرضى بتأخير الطبيب والسماح لهم بإعادة جدولة مواعيدهم
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="delay-doctor">الطبيب *</Label>
+              <Select onValueChange={(value) => setDelayData(prev => ({ ...prev, doctorId: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر الطبيب" />
+                </SelectTrigger>
+                <SelectContent>
+                  {doctorQueues.map((queue) => (
+                    <SelectItem key={queue.doctor_id} value={queue.doctor_id}>
+                      {queue.doctor_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="delay-minutes">مدة التأخير (دقيقة) *</Label>
+              <Select onValueChange={(value) => setDelayData(prev => ({ ...prev, delayMinutes: parseInt(value) }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر مدة التأخير" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="15">15 دقيقة</SelectItem>
+                  <SelectItem value="30">30 دقيقة</SelectItem>
+                  <SelectItem value="45">45 دقيقة</SelectItem>
+                  <SelectItem value="60">ساعة واحدة</SelectItem>
+                  <SelectItem value="90">ساعة ونصف</SelectItem>
+                  <SelectItem value="120">ساعتان</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="delay-reason">سبب التأخير *</Label>
+              <Textarea
+                id="delay-reason"
+                value={delayData.reason}
+                onChange={(e) => setDelayData(prev => ({ ...prev, reason: e.target.value }))}
+                placeholder="مثال: حالة طارئة، موعد طويل، مشكلة تقنية..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDelayDialog(false)}>
+              إلغاء
+            </Button>
+            <Button 
+              onClick={handleSetDoctorDelay}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              إشعار المرضى
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

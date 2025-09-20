@@ -50,9 +50,14 @@ export const useBookings = () => {
         throw error;
       }
 
+      // استبعاد الحالات الطارئة من قائمة حجوزات المرضى
+      const filteredData = (data || []).filter(booking => 
+        !booking.notes?.includes('حالة طارئة -')
+      );
+
       // Calculate waiting count for each booking
       const bookingsWithWaitingCount = await Promise.all(
-        (data || []).map(async (booking) => {
+        filteredData.map(async (booking) => {
           if (booking.status === 'completed' || booking.status === 'cancelled') {
             return { ...booking, waiting_count: 0 };
           }
@@ -72,7 +77,7 @@ export const useBookings = () => {
             console.warn('Error fetching current queue data:', queueError);
           }
 
-          const currentQueueNumber = currentQueueData?.queue_number || 0;
+          const currentQueueNumber = currentQueueData?.[0]?.queue_number || 0;
           
           // If no current patient, count all patients with lower queue numbers
           let waitingCount = 0;
@@ -95,7 +100,7 @@ export const useBookings = () => {
         })
       );
 
-      setBookings(bookingsWithWaitingCount);
+      setBookings(bookingsWithWaitingCount as unknown as Booking[]);
     } catch (err) {
       console.error('Error fetching bookings:', err);
       setError(err instanceof Error ? err.message : 'حدث خطأ في جلب الحجوزات');
@@ -292,7 +297,7 @@ export const useBookings = () => {
       let nextQueueNumber = 1;
       if (doctorId) {
         // console.log('Getting queue number for doctor:', doctorId, 'on date:', bookingDate);
-        const { data: doctorQueueNumber, error: queueError } = await supabase
+        const { data: doctorQueueNumber, error: queueError } = await (supabase as any)
           .rpc('get_next_doctor_queue_number', {
             p_medical_center_id: bookingData.medical_center_id,
             p_doctor_id: doctorId,
@@ -308,7 +313,7 @@ export const useBookings = () => {
       } else {
         // console.log('Getting general queue number for medical center:', bookingData.medical_center_id, 'on date:', bookingDate);
         // Use general queue number if no doctor
-        const { data: generalQueueNumber, error: generalQueueError } = await supabase
+        const { data: generalQueueNumber, error: generalQueueError } = await (supabase as any)
           .rpc('get_next_queue_number', {
             p_medical_center_id: bookingData.medical_center_id,
             p_booking_date: bookingDate
@@ -323,7 +328,7 @@ export const useBookings = () => {
       }
 
       // Generate QR code
-      const { data: qrCode, error: qrError } = await supabase
+      const { data: qrCode, error: qrError } = await (supabase as any)
         .rpc('generate_booking_qr_code');
 
       if (qrError) {
@@ -401,7 +406,7 @@ export const useBookings = () => {
       }
 
       // Create notification for the patient
-      const { error: notificationError } = await supabase
+      const { error: notificationError } = await (supabase as any)
         .rpc('create_booking_notification', {
           p_patient_id: user.id,
           p_booking_id: booking.id,

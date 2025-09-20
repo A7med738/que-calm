@@ -132,18 +132,44 @@ export const useDoctorQueues = (medicalCenterId: string) => {
 
       if (error) throw error;
 
-      // Get patient details for all patients
-      const patientIds = data?.map(patient => patient.patient_id) || [];
+      // Get patient details for all patients (excluding manual patients)
+      const patientIds = data?.filter(patient => !patient.notes?.includes('مريض يدوي -')).map(patient => patient.patient_id) || [];
+      let patientsData = null;
+      
       if (patientIds.length > 0) {
-        const { data: patientsData, error: patientsError } = await supabase
+        const { data: fetchedPatientsData, error: patientsError } = await supabase
           .rpc('get_multiple_patient_details', { p_patient_ids: patientIds });
 
         if (patientsError) {
           console.warn('Error fetching patient details:', patientsError);
+        } else {
+          patientsData = fetchedPatientsData;
         }
+      }
 
-        // Combine patient data with queue data
-        const patientsWithDetails: DoctorQueuePatient[] = data?.map(patient => {
+      // Combine patient data with queue data
+      const patientsWithDetails: DoctorQueuePatient[] = data?.map(patient => {
+        // Check if this is an emergency patient (queue_number = 0 or notes contain emergency)
+        if (patient.queue_number === 0 || patient.notes?.includes('حالة طارئة -')) {
+          // Extract emergency patient info from notes
+          const notesMatch = patient.notes?.match(/حالة طارئة - (.+?) - (.+?)( - .+)?$/);
+          return {
+            ...patient,
+            patient_name: notesMatch ? notesMatch[1] : 'حالة طارئة',
+            patient_phone: notesMatch ? notesMatch[2] : 'غير متوفر',
+            patient_email: 'غير متوفر'
+          };
+        } else if (patient.notes?.includes('مريض يدوي -')) {
+          // Extract manual patient info from notes
+          const notesMatch = patient.notes?.match(/مريض يدوي - (.+?) - (.+?)( - .+)?$/);
+          return {
+            ...patient,
+            patient_name: notesMatch ? notesMatch[1] : 'مريض يدوي',
+            patient_phone: notesMatch ? notesMatch[2] : 'غير متوفر',
+            patient_email: 'غير متوفر'
+          };
+        } else {
+          // Regular patient with account - use the data from the RPC function
           const patientDetails = patientsData?.find(p => p.id === patient.patient_id);
           return {
             ...patient,
@@ -151,12 +177,10 @@ export const useDoctorQueues = (medicalCenterId: string) => {
             patient_phone: patientDetails?.phone || 'غير متوفر',
             patient_email: patientDetails?.email || 'غير متوفر'
           };
-        }) || [];
+        }
+      }) || [];
 
-        return patientsWithDetails;
-      }
-
-      return data || [];
+      return patientsWithDetails;
     } catch (err) {
       console.error('Error fetching doctor queue patients:', err);
       throw err;
@@ -227,6 +251,413 @@ export const useDoctorQueues = (medicalCenterId: string) => {
       throw err;
     }
   };
+
+  // إعادة تنظيم الأدوار عند الإلغاء أو الحذف
+  const reorganizeQueue = useCallback(async (doctorId: string, bookingDate: string) => {
+    try {
+      // console.log('Reorganizing queue for doctor:', doctorId, 'on date:', bookingDate);
+      
+      // جلب جميع الحجوزات النشطة للطبيب في هذا التاريخ
+      const { data: activeBookings, error: fetchError } = await supabase
+        .from('bookings')
+        .select('id, queue_number, status')
+        .eq('doctor_id', doctorId)
+        .eq('booking_date', bookingDate)
+        .in('status', ['pending', 'confirmed', 'in_progress'])
+        .order('queue_number', { ascending: true });
+
+      if (fetchError) {
+        console.error('Error fetching active bookings for reorganization:', fetchError);
+        return;
+      }
+
+      if (!activeBookings || activeBookings.length === 0) {
+        // console.log('No active bookings to reorganize');
+        return;
+      }
+
+      // إعادة ترقيم الأدوار بشكل متتالي
+      const updates = activeBookings.map((booking, index) => ({
+        id: booking.id,
+        queue_number: index + 1
+      }));
+
+      // تحديث الأدوار في قاعدة البيانات
+      for (const update of updates) {
+        const { error: updateError } = await supabase
+          .from('bookings')
+          .update({ queue_number: update.queue_number })
+          .eq('id', update.id);
+
+        if (updateError) {
+          console.error('Error updating queue number for booking:', update.id, updateError);
+        }
+      }
+
+      // console.log('✅ Queue reorganized successfully');
+      await fetchDoctorQueues();
+    } catch (err) {
+      console.error('❌ Error reorganizing queue:', err);
+      throw err;
+    }
+  }, [fetchDoctorQueues]);
+
+  // إلغاء حجز وإعادة تنظيم الطابور
+  const cancelBookingAndReorganize = useCallback(async (bookingId: string) => {
+    try {
+      // جلب معلومات الحجز أولاً
+      const { data: booking, error: fetchError } = await supabase
+        .from('bookings')
+        .select('doctor_id, booking_date, queue_number')
+        .eq('id', bookingId)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching booking for cancellation:', fetchError);
+        throw fetchError;
+      }
+
+      // تحديث حالة الحجز إلى ملغي
+      const { error: updateError } = await supabase
+        .from('bookings')
+        .update({ status: 'cancelled' })
+        .eq('id', bookingId);
+
+      if (updateError) {
+        console.error('Error cancelling booking:', updateError);
+        throw updateError;
+      }
+
+      // إعادة تنظيم الطابور إذا كان هناك طبيب محدد
+      if (booking.doctor_id) {
+        await reorganizeQueue(booking.doctor_id, booking.booking_date);
+      }
+
+      // console.log('✅ Booking cancelled and queue reorganized');
+    } catch (err) {
+      console.error('❌ Error cancelling booking and reorganizing:', err);
+      throw err;
+    }
+  }, [reorganizeQueue]);
+
+  // إضافة مريض يدوياً من المركز
+  const addManualPatient = useCallback(async (patientData: {
+    patientName: string;
+    patientPhone: string;
+    doctorId: string;
+    serviceId: string;
+    notes?: string;
+  }) => {
+    try {
+      // console.log('Adding manual patient:', patientData);
+      
+      const today = new Date();
+      const bookingDate = today.toISOString().split('T')[0];
+      const bookingTime = today.toTimeString().split(' ')[0].substring(0, 5);
+
+      // إنشاء معرف وهمي للمريض اليدوي (UUID ثابت للمرضى اليدويين)
+      // نحتاج لاستخدام معرف موجود فعلياً في auth.users
+      const manualPatientId = '130f849a-d894-4ce6-a78e-0df3812093de'; // معرف المستخدم الحالي
+
+      // الحصول على رقم الدور التالي للطبيب
+      const { data: nextQueueNumber, error: queueError } = await supabase
+        .rpc('get_next_doctor_queue_number', {
+          p_medical_center_id: medicalCenterId,
+          p_doctor_id: patientData.doctorId,
+          p_booking_date: bookingDate
+        });
+
+      if (queueError) {
+        console.error('Error getting next queue number:', queueError);
+        throw new Error('خطأ في الحصول على رقم الدور');
+      }
+
+      // إنشاء رمز QR فريد
+      const { data: qrCode, error: qrError } = await supabase
+        .rpc('generate_booking_qr_code');
+
+      if (qrError) {
+        console.error('Error generating QR code:', qrError);
+        throw new Error('خطأ في إنشاء رمز الاستجابة السريعة');
+      }
+
+      // إنشاء الحجز مع معرف وهمي
+      const { data: booking, error: bookingError } = await supabase
+        .from('bookings')
+        .insert({
+          patient_id: manualPatientId, // معرف وهمي للمريض اليدوي
+          medical_center_id: medicalCenterId,
+          service_id: patientData.serviceId,
+          doctor_id: patientData.doctorId,
+          booking_date: bookingDate,
+          booking_time: bookingTime,
+          queue_number: nextQueueNumber || 1,
+          qr_code: qrCode,
+          status: 'confirmed', // مؤكد مباشرة
+          notes: `مريض يدوي - ${patientData.patientName} - ${patientData.patientPhone}${patientData.notes ? ' - ' + patientData.notes : ''}`
+        })
+        .select()
+        .single();
+
+      if (bookingError) {
+        console.error('Error creating manual booking:', bookingError);
+        throw new Error('خطأ في إنشاء الحجز');
+      }
+
+      // إنشاء إدخال في تتبع الطابور (مع الحقول الصحيحة)
+      const { error: queueTrackingError } = await supabase
+        .from('queue_tracking')
+        .insert({
+          booking_id: booking.id,
+          current_number: nextQueueNumber || 1,
+          waiting_count: 0,
+          status: 'waiting',
+          created_at: new Date().toISOString()
+        });
+
+      if (queueTrackingError) {
+        console.warn('Error creating queue tracking entry:', queueTrackingError);
+        // لا نوقف العملية إذا فشل إنشاء تتبع الطابور
+      }
+
+      // إنشاء إشعار (إذا كانت الدالة موجودة)
+      try {
+        // محاولة إنشاء إشعار - إذا فشلت فلا نوقف العملية
+        const { error: notificationError } = await supabase
+          .from('notifications')
+          .insert({
+            patient_id: manualPatientId,
+            medical_center_id: medicalCenterId,
+            title: 'تم إضافة مريض يدوي',
+            message: `تم إضافة مريض يدوي: ${patientData.patientName} - رقم الدور: ${nextQueueNumber || 1}`,
+            is_read: false
+          });
+        
+        if (notificationError) {
+          console.warn('Error creating notification:', notificationError);
+        }
+      } catch (notificationError) {
+        console.warn('Error creating notification:', notificationError);
+        // لا نوقف العملية إذا فشل إنشاء الإشعار
+      }
+
+      // تحديث قائمة طوابير الأطباء
+      await fetchDoctorQueues();
+
+      // console.log('✅ Manual patient added successfully');
+      return booking;
+    } catch (err) {
+      console.error('❌ Error adding manual patient:', err);
+      throw err;
+    }
+  }, [medicalCenterId, fetchDoctorQueues]);
+
+  // إضافة مريض طارئ إلى طابور الأولوية
+  const addEmergencyPatient = useCallback(async (patientData: {
+    patientName: string;
+    patientPhone: string;
+    doctorId: string;
+    serviceId: string;
+    notes?: string;
+  }) => {
+    try {
+      const today = new Date();
+      const bookingDate = today.toISOString().split('T')[0];
+      const bookingTime = today.toTimeString().split(' ')[0].substring(0, 5);
+
+      // استخدام معرف المستخدم الحالي (الطبيب/الممرضة) للحالات الطارئة
+      const { data: { user } } = await supabase.auth.getUser();
+      const manualPatientId = user?.id || '130f849a-d894-4ce6-a78e-0df3812093de';
+
+      // إنشاء رمز QR فريد
+      const { data: qrCode, error: qrError } = await supabase
+        .rpc('generate_booking_qr_code');
+
+      if (qrError) {
+        console.error('Error generating QR code:', qrError);
+        throw new Error('خطأ في إنشاء رمز الاستجابة السريعة');
+      }
+
+      // إنشاء الحجز مع حالة طارئة
+      const { data: booking, error: bookingError } = await supabase
+        .from('bookings')
+        .insert({
+          patient_id: manualPatientId,
+          medical_center_id: medicalCenterId,
+          service_id: patientData.serviceId,
+          doctor_id: patientData.doctorId,
+          booking_date: bookingDate,
+          booking_time: bookingTime,
+          queue_number: 0, // رقم 0 للحالات الطارئة
+          qr_code: qrCode,
+          status: 'confirmed', // حالة طارئة (نستخدم confirmed مع queue_number = 0)
+          notes: `حالة طارئة - ${patientData.patientName} - ${patientData.patientPhone}${patientData.notes ? ' - ' + patientData.notes : ''}`
+        })
+        .select()
+        .single();
+
+      if (bookingError) {
+        console.error('Error creating emergency booking:', bookingError);
+        throw new Error('خطأ في إنشاء الحجز الطارئ');
+      }
+
+      // إنشاء إدخال في تتبع الطابور
+      const { error: queueTrackingError } = await supabase
+        .from('queue_tracking')
+        .insert({
+          booking_id: booking.id,
+          current_number: 0,
+          waiting_count: 0,
+          status: 'waiting',
+          created_at: new Date().toISOString()
+        });
+
+      if (queueTrackingError) {
+        console.warn('Error creating emergency queue tracking entry:', queueTrackingError);
+      }
+
+      // إنشاء إشعار للمرضى الآخرين الذين يحجزون مع نفس الطبيب
+      try {
+        // جلب جميع المرضى الذين يحجزون مع نفس الطبيب اليوم
+        const today = new Date().toISOString().split('T')[0];
+        const { data: patientsWithSameDoctor, error: patientsError } = await supabase
+          .from('bookings')
+          .select('patient_id')
+          .eq('medical_center_id', medicalCenterId)
+          .eq('doctor_id', patientData.doctorId)
+          .eq('booking_date', today)
+          .in('status', ['pending', 'confirmed', 'in_progress'])
+          .neq('patient_id', manualPatientId); // استبعاد المريض الطارئ نفسه
+
+        if (patientsError) {
+          console.warn('Error fetching patients with same doctor:', patientsError);
+        } else if (patientsWithSameDoctor && patientsWithSameDoctor.length > 0) {
+          // إنشاء إشعار لكل مريض يحجز مع نفس الطبيب
+          const notifications = patientsWithSameDoctor.map(patient => ({
+            patient_id: patient.patient_id,
+            medical_center_id: medicalCenterId,
+            title: 'حالة طارئة',
+            message: `عذراً، هناك حالة طارئة مع طبيبك، سيتم تأخير المواعيد قليلاً`,
+            is_read: false
+          }));
+
+          const { error: notificationError } = await supabase
+            .from('notifications')
+            .insert(notifications);
+          
+          if (notificationError) {
+            console.warn('Error creating emergency notifications:', notificationError);
+          }
+        }
+      } catch (notificationError) {
+        console.warn('Error creating emergency notifications:', notificationError);
+      }
+
+      // تحديث قائمة طوابير الأطباء
+      await fetchDoctorQueues();
+
+      return booking;
+    } catch (err) {
+      console.error('❌ Error adding emergency patient:', err);
+      throw err;
+    }
+  }, [medicalCenterId, fetchDoctorQueues]);
+
+  // تعيين تأخير للطبيب
+  const setDoctorDelay = useCallback(async (doctorId: string, delayMinutes: number, reason: string) => {
+    try {
+      // جلب جميع المرضى الذين يحجزون مع نفس الطبيب اليوم
+      const today = new Date().toISOString().split('T')[0];
+      const { data: patientsWithSameDoctor, error: patientsError } = await supabase
+        .from('bookings')
+        .select('patient_id')
+        .eq('medical_center_id', medicalCenterId)
+        .eq('doctor_id', doctorId)
+        .eq('booking_date', today)
+        .in('status', ['pending', 'confirmed', 'in_progress']);
+
+      if (patientsError) {
+        console.warn('Error fetching patients with same doctor:', patientsError);
+      } else if (patientsWithSameDoctor && patientsWithSameDoctor.length > 0) {
+        // إنشاء إشعار لكل مريض يحجز مع نفس الطبيب
+        const notifications = patientsWithSameDoctor.map(patient => ({
+          patient_id: patient.patient_id,
+          medical_center_id: medicalCenterId,
+          title: 'تأخير الطبيب',
+          message: `دكتور متأخر ${delayMinutes} دقيقة - ${reason}. يمكنكم إعادة جدولة موعدكم`,
+          is_read: false
+        }));
+
+        const { error: notificationError } = await supabase
+          .from('notifications')
+          .insert(notifications);
+        
+        if (notificationError) {
+          console.warn('Error creating delay notifications:', notificationError);
+        }
+      }
+
+      // يمكن إضافة المزيد من المنطق هنا مثل تحديث حالة الطبيب
+      console.log(`Doctor ${doctorId} delayed by ${delayMinutes} minutes: ${reason}`);
+      
+    } catch (err) {
+      console.error('❌ Error setting doctor delay:', err);
+      throw err;
+    }
+  }, [medicalCenterId]);
+
+  // إعادة ترتيب الطابور يدوياً
+  const reorderQueue = useCallback(async (doctorId: string, bookingId: string, newPosition: number) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      // جلب جميع الحجوزات النشطة للطبيب
+      const { data: activeBookings, error: fetchError } = await supabase
+        .from('bookings')
+        .select('id, queue_number, status')
+        .eq('doctor_id', doctorId)
+        .eq('booking_date', today)
+        .in('status', ['pending', 'confirmed', 'in_progress'])
+        .order('queue_number', { ascending: true });
+
+      if (fetchError) {
+        console.error('Error fetching active bookings for reordering:', fetchError);
+        return;
+      }
+
+      if (!activeBookings || activeBookings.length === 0) {
+        return;
+      }
+
+      // إعادة ترتيب الأدوار
+      const updates = activeBookings.map((booking, index) => {
+        if (booking.id === bookingId) {
+          return { id: booking.id, queue_number: newPosition };
+        } else if (index >= newPosition) {
+          return { id: booking.id, queue_number: index + 1 };
+        } else {
+          return { id: booking.id, queue_number: index + 1 };
+        }
+      });
+
+      // تحديث الأدوار في قاعدة البيانات
+      for (const update of updates) {
+        const { error: updateError } = await supabase
+          .from('bookings')
+          .update({ queue_number: update.queue_number })
+          .eq('id', update.id);
+
+        if (updateError) {
+          console.error('Error updating queue number for booking:', update.id, updateError);
+        }
+      }
+
+      await fetchDoctorQueues();
+    } catch (err) {
+      console.error('❌ Error reordering queue:', err);
+      throw err;
+    }
+  }, [fetchDoctorQueues]);
 
   // Professional Realtime subscription with proper debouncing
   const setupRealtimeSubscription = useCallback(() => {
@@ -358,5 +789,11 @@ export const useDoctorQueues = (medicalCenterId: string) => {
     callNextPatient,
     skipPatient,
     completePatient,
+    reorganizeQueue,
+    cancelBookingAndReorganize,
+    addManualPatient,
+    addEmergencyPatient,
+    setDoctorDelay,
+    reorderQueue
   };
 };

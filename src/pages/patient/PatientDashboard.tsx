@@ -31,6 +31,7 @@ import { useBookings } from "@/hooks/useBookings";
 import { useMedicalCenters } from "@/hooks/useMedicalCenters";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useToast } from "@/hooks/use-toast";
+import { useNotifications } from "@/hooks/useNotifications";
 import PatientBottomNavigation from "@/components/patient/PatientBottomNavigation";
 
 const PatientDashboard = () => {
@@ -48,6 +49,7 @@ const PatientDashboard = () => {
   const { bookings, loading: bookingsLoading, cancelBooking, deleteBooking } = useBookings();
   const { centers, loading: centersLoading, search } = useMedicalCenters();
   const { isAdmin, isClinicAdmin } = useUserRole();
+  const { notifications, getUnreadCount, markAsRead } = useNotifications();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
@@ -660,6 +662,54 @@ const PatientDashboard = () => {
             <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-2">حجوزاتي</h2>
             <p className="text-muted-foreground">جميع حجوزاتك الطبية</p>
           </div>
+
+          {/* Notifications Section */}
+          {notifications && notifications.length > 0 && (
+            <div className="mb-6 space-y-3">
+              {notifications
+                .filter(notification => !notification.is_read)
+                .map((notification) => (
+                  <Card key={notification.id} className={`border-l-4 ${
+                    notification.title === 'حالة طارئة' 
+                      ? 'border-l-red-500 bg-red-50' 
+                      : notification.title === 'تأخير الطبيب'
+                      ? 'border-l-orange-500 bg-orange-50'
+                      : 'border-l-blue-500 bg-blue-50'
+                  }`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-semibold text-sm">
+                              {notification.title === 'حالة طارئة' && '🚨 '}
+                              {notification.title === 'تأخير الطبيب' && '⏰ '}
+                              {notification.title}
+                            </h4>
+                            <Badge variant="secondary" className="text-xs">
+                              جديد
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {notification.message}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {new Date(notification.created_at).toLocaleString('ar-SA')}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => markAsRead(notification.id)}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+            </div>
+          )}
 
           {bookingsLoading ? (
             <div className="text-center py-12">

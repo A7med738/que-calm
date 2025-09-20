@@ -71,27 +71,63 @@ export const useClinicBookings = (medicalCenterId: string) => {
 
       // console.log('Fetched bookings:', data?.length || 0, 'bookings');
 
-      // Get patient details using RPC function
-      const patientIds = data.map(booking => booking.patient_id);
-      const { data: patientsData, error: patientsError } = await supabase
-        .rpc('get_multiple_patient_details', { p_patient_ids: patientIds });
+    // Get patient details using RPC function (only for non-manual and non-emergency patients)
+    const patientIds = data
+      .filter(booking => !booking.notes?.includes('مريض يدوي -') && !booking.notes?.includes('حالة طارئة -'))
+      .map(booking => booking.patient_id);
+      
+      let patientsData = null;
+      if (patientIds.length > 0) {
+        const { data: fetchedPatientsData, error: patientsError } = await supabase
+          .rpc('get_multiple_patient_details', { p_patient_ids: patientIds });
 
-      if (patientsError) {
-        console.warn('Error fetching patient details:', patientsError);
+        if (patientsError) {
+          console.warn('Error fetching patient details:', patientsError);
+        } else {
+          patientsData = fetchedPatientsData;
+        }
       }
 
-      // Transform the data to include joined fields
-      const transformedBookings: ClinicBooking[] = data.map(booking => {
-        const patient = patientsData?.find(p => p.id === booking.patient_id);
+    // Transform the data to include joined fields
+    const transformedBookings: ClinicBooking[] = data.map(booking => {
+      // Check if this is an emergency patient (queue_number = 0 or notes contain emergency)
+      if (booking.queue_number === 0 || booking.notes?.includes('حالة طارئة -')) {
+        // Extract emergency patient info from notes
+        const notesMatch = booking.notes?.match(/حالة طارئة - (.+?) - (.+?)( - .+)?$/);
         return {
           ...booking,
           service_name: booking.services?.name || 'خدمة غير محددة',
           service_price: booking.services?.price || 0,
           doctor_name: booking.services?.doctor_name || booking.doctors?.name || 'طبيب غير محدد',
-          patient_name: patient?.full_name || 'مريض',
-          patient_phone: patient?.phone || 'غير متوفر',
-          patient_email: patient?.email || 'غير متوفر'
+          patient_name: notesMatch ? notesMatch[1] : 'حالة طارئة',
+          patient_phone: notesMatch ? notesMatch[2] : 'غير متوفر',
+          patient_email: 'غير متوفر'
         };
+      } else if (booking.notes?.includes('مريض يدوي -')) {
+        // Extract manual patient info from notes
+        const notesMatch = booking.notes?.match(/مريض يدوي - (.+?) - (.+?)( - .+)?$/);
+        return {
+          ...booking,
+          service_name: booking.services?.name || 'خدمة غير محددة',
+          service_price: booking.services?.price || 0,
+          doctor_name: booking.services?.doctor_name || booking.doctors?.name || 'طبيب غير محدد',
+          patient_name: notesMatch ? notesMatch[1] : 'مريض يدوي',
+          patient_phone: notesMatch ? notesMatch[2] : 'غير متوفر',
+          patient_email: 'غير متوفر'
+        };
+      } else {
+          // Regular patient with account
+          const patient = patientsData?.find(p => p.id === booking.patient_id);
+          return {
+            ...booking,
+            service_name: booking.services?.name || 'خدمة غير محددة',
+            service_price: booking.services?.price || 0,
+            doctor_name: booking.services?.doctor_name || booking.doctors?.name || 'طبيب غير محدد',
+            patient_name: patient?.full_name || 'مريض',
+            patient_phone: patient?.phone || 'غير متوفر',
+            patient_email: patient?.email || 'غير متوفر'
+          };
+        }
       });
 
       // console.log('Transformed bookings data:', transformedBookings);
