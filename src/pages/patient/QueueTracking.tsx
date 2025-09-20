@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,62 +17,70 @@ const QueueTracking = () => {
   const [booking, setBooking] = useState<any>(null);
   
   // Fetch real booking data
-  useEffect(() => {
-    const fetchBookingData = async () => {
-      if (!bookingId || !user) {
-        console.log('QueueTracking: Missing bookingId or user', { bookingId, user: user?.id });
-        return;
+  const fetchBookingData = useCallback(async () => {
+    if (!bookingId) {
+      console.log('QueueTracking: Missing bookingId', { bookingId });
+      return;
+    }
+    
+    if (!user) {
+      console.log('QueueTracking: User not loaded yet, waiting...', { bookingId });
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      console.log('QueueTracking: Fetching booking data for ID:', bookingId);
+      
+      // Get booking details
+      const { data: bookingData, error: bookingError } = await supabase
+        .from('patient_bookings_with_details')
+        .select('*')
+        .eq('id', bookingId)
+        .eq('patient_id', user.id)
+        .single();
+
+      if (bookingError) {
+        console.error('QueueTracking: Error fetching booking:', bookingError);
+        throw bookingError;
       }
       
-      try {
-        setLoading(true);
-        console.log('QueueTracking: Fetching booking data for ID:', bookingId);
-        
-        // Get booking details
-        const { data: bookingData, error: bookingError } = await supabase
-          .from('patient_bookings_with_details')
-          .select('*')
-          .eq('id', bookingId)
-          .eq('patient_id', user.id)
-          .single();
+      console.log('QueueTracking: Booking data fetched successfully:', bookingData);
+      setBooking(bookingData);
+      setMyNumber(bookingData.queue_number);
 
-        if (bookingError) {
-          console.error('QueueTracking: Error fetching booking:', bookingError);
-          throw bookingError;
-        }
-        
-        console.log('QueueTracking: Booking data fetched successfully:', bookingData);
-        setBooking(bookingData);
-        setMyNumber(bookingData.queue_number);
+      // Get current queue number for the medical center today
+      const today = new Date().toISOString().split('T')[0];
+      const { data: currentQueueData, error: queueError } = await supabase
+        .from('bookings')
+        .select('queue_number')
+        .eq('medical_center_id', bookingData.medical_center_id)
+        .eq('booking_date', today)
+        .eq('status', 'in_progress')
+        .order('queue_number', { ascending: true })
+        .limit(1);
 
-        // Get current queue number for the medical center today
-        const today = new Date().toISOString().split('T')[0];
-        const { data: currentQueueData } = await supabase
-          .from('bookings')
-          .select('queue_number')
-          .eq('medical_center_id', bookingData.medical_center_id)
-          .eq('booking_date', today)
-          .eq('status', 'in_progress')
-          .order('queue_number', { ascending: true })
-          .limit(1)
-          .single();
-
-        setCurrentNumber(currentQueueData?.queue_number || 0);
-        
-      } catch (error) {
-        console.error('Error fetching booking data:', error);
-      } finally {
-        setLoading(false);
+      if (queueError) {
+        console.warn('QueueTracking: Error fetching current queue data:', queueError);
       }
-    };
 
+      setCurrentNumber(currentQueueData?.[0]?.queue_number || 0);
+      
+    } catch (error) {
+      console.error('Error fetching booking data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [bookingId, user]);
+
+  useEffect(() => {
     fetchBookingData();
     
     // Set up real-time updates
     const interval = setInterval(fetchBookingData, 10000); // Update every 10 seconds
     
     return () => clearInterval(interval);
-  }, [bookingId, user]);
+  }, [fetchBookingData]);
 
   const waitingCount = Math.max(0, myNumber - currentNumber);
   const progress = myNumber > 0 ? Math.min(100, (currentNumber / myNumber) * 100) : 0;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
@@ -35,7 +35,7 @@ export const useUserRole = () => {
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
-  const fetchUserRole = async () => {
+  const fetchUserRole = useCallback(async () => {
     if (!user) {
       console.log('No user found, setting loading to false');
       setUserRole(null);
@@ -93,7 +93,7 @@ export const useUserRole = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   const isAdmin = () => {
     if (!user) return false;
