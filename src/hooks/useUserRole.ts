@@ -37,25 +37,41 @@ export const useUserRole = () => {
         .single();
 
       if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
-        // If there's a policy error, try using the RPC function instead
+        // Handle different error types gracefully
         if (error.code === '42P17' || error.message?.includes('infinite recursion')) {
           console.warn('Policy error detected, using fallback method');
-          // For now, assume the user is a patient if we can't fetch the role
           setUserRole(null);
           return;
         }
+        
+        // Handle 406 Not Acceptable errors
+        if (error.code === 'PGRST200' || error.message?.includes('406')) {
+          console.warn('406 error detected, user likely has no role - defaulting to patient');
+          setUserRole(null);
+          return;
+        }
+        
         throw error;
       }
 
       setUserRole(data || null);
     } catch (err) {
       console.error('Error fetching user role:', err);
-      // Don't set error for policy issues, just assume patient role
-      if (err instanceof Error && (err.message.includes('infinite recursion') || err.message.includes('42P17'))) {
-        setUserRole(null);
-      } else {
-        setError(err instanceof Error ? err.message : 'حدث خطأ في جلب دور المستخدم');
+      
+      // Handle various error types gracefully
+      if (err instanceof Error) {
+        if (err.message.includes('infinite recursion') || 
+            err.message.includes('42P17') ||
+            err.message.includes('406') ||
+            err.message.includes('PGRST200')) {
+          console.warn('Policy or access error, defaulting to patient role');
+          setUserRole(null);
+          return;
+        }
       }
+      
+      // Only set error for unexpected issues
+      setError(err instanceof Error ? err.message : 'حدث خطأ في جلب دور المستخدم');
     } finally {
       setLoading(false);
     }
