@@ -22,17 +22,17 @@ const SmartRouter = ({ children }: SmartRouterProps) => {
     if (user) {
       // التحقق من نوع المستخدم والتوجيه المناسب
       if (isAdmin()) {
-        console.log('User is admin, redirecting to admin dashboard');
+        // console.log('User is admin, redirecting to admin dashboard');
         navigate('/admin/dashboard', { replace: true });
       } else if (isClinicAdmin()) {
-        console.log('User is clinic admin, redirecting to clinic dashboard');
+        // console.log('User is clinic admin, redirecting to clinic dashboard');
         navigate('/clinic/dashboard', { replace: true });
       } else if (isPatient()) {
-        console.log('User is patient, redirecting to patient dashboard');
+        // console.log('User is patient, redirecting to patient dashboard');
         navigate('/patient/dashboard', { replace: true });
       } else {
         // إذا لم يكن لديه دور محدد، افترض أنه مريض
-        console.log('User has no specific role, defaulting to patient dashboard');
+        // console.log('User has no specific role, defaulting to patient dashboard');
         navigate('/patient/dashboard', { replace: true });
       }
     }

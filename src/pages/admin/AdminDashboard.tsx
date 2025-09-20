@@ -234,7 +234,7 @@ const AdminDashboard = () => {
   
   // Special case for the specific admin user
   if (user.id === '130f849a-d894-4ce6-a78e-0df3812093de') {
-    console.log('Special admin user detected, allowing access');
+    // console.log('Special admin user detected, allowing access');
   } else if (!isAdmin()) {
     return null;
   }

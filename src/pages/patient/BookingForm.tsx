@@ -46,11 +46,11 @@ const BookingForm = () => {
   const [selectedService, setSelectedService] = useState<any>(null);
 
   useEffect(() => {
-    console.log('BookingForm - services:', services);
-    console.log('BookingForm - serviceId:', serviceId);
+    // console.log('BookingForm - services:', services);
+    // console.log('BookingForm - serviceId:', serviceId);
     if (services && serviceId) {
       const service = services.find(s => s.id === serviceId);
-      console.log('BookingForm - found service:', service);
+      // console.log('BookingForm - found service:', service);
       setSelectedService(service);
     }
   }, [services, serviceId]);
@@ -79,11 +79,11 @@ const BookingForm = () => {
     if (!selectedService || !center) return;
 
     try {
-      console.log('Creating booking with data:', {
-        medical_center_id: center.id,
-        service_id: selectedService.id,
-        notes: formData.notes
-      });
+      // console.log('Creating booking with data:', {
+      //   medical_center_id: center.id,
+      //   service_id: selectedService.id,
+      //   notes: formData.notes
+      // });
 
       const booking = await createBooking({
         medical_center_id: center.id,
@@ -91,7 +91,7 @@ const BookingForm = () => {
         notes: formData.notes
       });
 
-      console.log('Booking created successfully:', booking);
+      // console.log('Booking created successfully:', booking);
 
       toast({
         title: "تم الحجز بنجاح",
@@ -100,10 +100,10 @@ const BookingForm = () => {
 
       // Navigate to queue tracking with the booking ID
       if (booking && booking.id) {
-        console.log('Navigating to queue tracking with booking ID:', booking.id);
+        // console.log('Navigating to queue tracking with booking ID:', booking.id);
         navigate(`/patient/queue/${booking.id}`);
       } else {
-        console.log('No booking ID available, navigating to dashboard');
+        // console.log('No booking ID available, navigating to dashboard');
         // Fallback to dashboard if booking ID is not available
         navigate('/patient/dashboard');
       }

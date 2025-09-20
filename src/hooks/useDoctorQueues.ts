@@ -46,7 +46,7 @@ export const useDoctorQueues = (medicalCenterId: string) => {
       // Get today's date
       const today = new Date().toISOString().split('T')[0];
 
-      console.log('Fetching doctor queues for medical center:', medicalCenterId, 'on date:', today);
+      // console.log('Fetching doctor queues for medical center:', medicalCenterId, 'on date:', today);
 
       // Get all doctor queues for this medical center (try fallback if main function fails)
       let { data, error } = await supabase
@@ -55,18 +55,18 @@ export const useDoctorQueues = (medicalCenterId: string) => {
           p_booking_date: today
         });
 
-      console.log('Main function result:', { data: data?.length || 0, error });
+      // console.log('Main function result:', { data: data?.length || 0, error });
 
       // If no data or error, try fallback function
       if (!data || data.length === 0 || error) {
-        console.log('Trying fallback function for doctor queues...');
+        // console.log('Trying fallback function for doctor queues...');
         const fallbackResult = await supabase
           .rpc('get_medical_center_doctor_queues_fallback', {
             p_medical_center_id: medicalCenterId,
             p_booking_date: today
           });
         
-        console.log('Fallback function result:', { data: fallbackResult.data?.length || 0, error: fallbackResult.error });
+        // console.log('Fallback function result:', { data: fallbackResult.data?.length || 0, error: fallbackResult.error });
         
         if (fallbackResult.data && fallbackResult.data.length > 0) {
           data = fallbackResult.data;
@@ -79,7 +79,7 @@ export const useDoctorQueues = (medicalCenterId: string) => {
         throw error;
       }
 
-      console.log('Fetched doctor queues:', data?.length || 0, 'queues');
+      // console.log('Fetched doctor queues:', data?.length || 0, 'queues');
       setDoctorQueues(data || []);
       setLastUpdateTime(new Date());
     } catch (err) {
@@ -96,7 +96,7 @@ export const useDoctorQueues = (medicalCenterId: string) => {
     try {
       const today = new Date().toISOString().split('T')[0];
 
-      console.log('Fetching patients for doctor:', doctorId, 'in medical center:', medicalCenterId, 'on date:', today);
+      // console.log('Fetching patients for doctor:', doctorId, 'in medical center:', medicalCenterId, 'on date:', today);
 
       // Get patients in this doctor's queue (try fallback if main function fails)
       let { data, error } = await supabase
@@ -106,11 +106,11 @@ export const useDoctorQueues = (medicalCenterId: string) => {
           p_booking_date: today
         });
 
-      console.log('Main function result for patients:', { data: data?.length || 0, error });
+      // console.log('Main function result for patients:', { data: data?.length || 0, error });
 
       // If no data or error, try fallback function
       if (!data || data.length === 0 || error) {
-        console.log('Trying fallback function for doctor queue patients...');
+        // console.log('Trying fallback function for doctor queue patients...');
         // Get doctor name from doctorQueues state or make a direct query
         const doctorQueue = doctorQueues.find(dq => dq.doctor_id === doctorId);
         if (doctorQueue) {
@@ -121,7 +121,7 @@ export const useDoctorQueues = (medicalCenterId: string) => {
               p_booking_date: today
             });
           
-          console.log('Fallback function result for patients:', { data: fallbackResult.data?.length || 0, error: fallbackResult.error });
+          // console.log('Fallback function result for patients:', { data: fallbackResult.data?.length || 0, error: fallbackResult.error });
           
           if (fallbackResult.data && fallbackResult.data.length > 0) {
             data = fallbackResult.data;
@@ -173,7 +173,7 @@ export const useDoctorQueues = (medicalCenterId: string) => {
 
       if (error) throw error;
 
-      console.log('✅ Patient status updated successfully');
+        // console.log('✅ Patient status updated successfully');
       
       // Refresh doctor queues
       await fetchDoctorQueues();
@@ -232,7 +232,7 @@ export const useDoctorQueues = (medicalCenterId: string) => {
   const setupRealtimeSubscription = useCallback(() => {
     if (!medicalCenterId) return;
 
-    console.log('Setting up Realtime subscription for doctor queues:', medicalCenterId);
+      // console.log('Setting up Realtime subscription for doctor queues:', medicalCenterId);
 
     // Create a debounced update function
     let updateTimeout: NodeJS.Timeout | null = null;
@@ -301,23 +301,23 @@ export const useDoctorQueues = (medicalCenterId: string) => {
         }
       )
       .subscribe((status) => {
-        console.log('Doctor queues Realtime subscription status:', status);
+        // console.log('Doctor queues Realtime subscription status:', status);
         
         if (status === 'SUBSCRIBED') {
-          console.log('✅ Successfully connected to doctor queues Realtime updates');
+          // console.log('✅ Successfully connected to doctor queues Realtime updates');
           setIsRealtimeConnected(true);
         } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Doctor queues Realtime subscription error');
+          // console.error('❌ Doctor queues Realtime subscription error');
           setIsRealtimeConnected(false);
         } else if (status === 'CLOSED') {
-          console.log('🔌 Doctor queues Realtime subscription closed');
+          // console.log('🔌 Doctor queues Realtime subscription closed');
           setIsRealtimeConnected(false);
         }
       });
 
     // Return cleanup function
     return () => {
-      console.log('Cleaning up doctor queues Realtime subscription');
+      // console.log('Cleaning up doctor queues Realtime subscription');
       if (updateTimeout) {
         clearTimeout(updateTimeout);
       }
@@ -329,7 +329,7 @@ export const useDoctorQueues = (medicalCenterId: string) => {
   useEffect(() => {
     if (!medicalCenterId) return;
 
-    console.log('Initializing doctor queues for medical center:', medicalCenterId);
+    // console.log('Initializing doctor queues for medical center:', medicalCenterId);
 
     // Initial fetch
     fetchDoctorQueues();
@@ -339,7 +339,7 @@ export const useDoctorQueues = (medicalCenterId: string) => {
 
     // Cleanup function
     return () => {
-      console.log('Cleaning up doctor queues hook');
+      // console.log('Cleaning up doctor queues hook');
       if (cleanup) {
         cleanup();
       }

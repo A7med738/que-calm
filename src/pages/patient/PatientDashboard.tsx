@@ -131,9 +131,9 @@ const PatientDashboard = () => {
 
   const handleDeleteBooking = async (bookingId: string) => {
     try {
-      console.log('handleDeleteBooking called with ID:', bookingId);
+      // console.log('handleDeleteBooking called with ID:', bookingId);
       await deleteBooking(bookingId);
-      console.log('deleteBooking completed successfully');
+      // console.log('deleteBooking completed successfully');
       toast({
         title: "تم حذف الحجز",
         description: "تم حذف الحجز نهائياً من قائمة حجوزاتك",

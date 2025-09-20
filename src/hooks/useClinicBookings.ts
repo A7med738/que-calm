@@ -42,7 +42,7 @@ export const useClinicBookings = (medicalCenterId: string) => {
       // Get today's date
       const today = new Date().toISOString().split('T')[0];
 
-      console.log('Fetching bookings for medical center:', medicalCenterId, 'on date:', today);
+      // console.log('Fetching bookings for medical center:', medicalCenterId, 'on date:', today);
 
       const { data, error } = await supabase
         .from('bookings')
@@ -69,7 +69,7 @@ export const useClinicBookings = (medicalCenterId: string) => {
         throw error;
       }
 
-      console.log('Fetched bookings:', data?.length || 0, 'bookings');
+      // console.log('Fetched bookings:', data?.length || 0, 'bookings');
 
       // Get patient details using RPC function
       const patientIds = data.map(booking => booking.patient_id);
@@ -94,7 +94,7 @@ export const useClinicBookings = (medicalCenterId: string) => {
         };
       });
 
-      console.log('Transformed bookings data:', transformedBookings);
+      // console.log('Transformed bookings data:', transformedBookings);
       setBookings(transformedBookings);
       setLastUpdateTime(new Date());
     } catch (err) {
@@ -109,7 +109,7 @@ export const useClinicBookings = (medicalCenterId: string) => {
   const setupRealtimeSubscription = useCallback(() => {
     if (!medicalCenterId) return;
 
-    console.log('Setting up professional Realtime subscription for medical center:', medicalCenterId);
+        // console.log('Setting up professional Realtime subscription for medical center:', medicalCenterId);
 
     // Create a debounced update function
     let updateTimeout: NodeJS.Timeout | null = null;
@@ -137,11 +137,11 @@ export const useClinicBookings = (medicalCenterId: string) => {
           filter: `medical_center_id=eq.${medicalCenterId}`
         },
         (payload) => {
-          console.log('Realtime booking change detected:', {
-            eventType: payload.eventType,
-            new: payload.new,
-            old: payload.old
-          });
+            // console.log('Realtime booking change detected:', {
+            //   eventType: payload.eventType,
+            //   new: payload.new,
+            //   old: payload.old
+            // });
           
           // Only refresh for relevant changes
           if (payload.eventType === 'INSERT' || 
@@ -152,23 +152,23 @@ export const useClinicBookings = (medicalCenterId: string) => {
         }
       )
       .subscribe((status) => {
-        console.log('Realtime subscription status:', status);
+        // console.log('Realtime subscription status:', status);
         
         if (status === 'SUBSCRIBED') {
-          console.log('✅ Successfully connected to Realtime updates');
+          // console.log('✅ Successfully connected to Realtime updates');
           setIsRealtimeConnected(true);
         } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Realtime subscription error');
+          // console.error('❌ Realtime subscription error');
           setIsRealtimeConnected(false);
         } else if (status === 'CLOSED') {
-          console.log('🔌 Realtime subscription closed');
+          // console.log('🔌 Realtime subscription closed');
           setIsRealtimeConnected(false);
         }
       });
 
     // Return cleanup function
     return () => {
-      console.log('Cleaning up Realtime subscription');
+      // console.log('Cleaning up Realtime subscription');
       if (updateTimeout) {
         clearTimeout(updateTimeout);
       }
@@ -266,7 +266,7 @@ export const useClinicBookings = (medicalCenterId: string) => {
 
     // Cleanup function
     return () => {
-      console.log('Cleaning up clinic bookings hook');
+      // console.log('Cleaning up clinic bookings hook');
       if (cleanup) {
         cleanup();
       }

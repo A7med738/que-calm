@@ -133,7 +133,7 @@ export const useBookings = () => {
 
   const deleteBooking = async (bookingId: string) => {
     try {
-      console.log('Deleting booking:', bookingId);
+      // console.log('Deleting booking:', bookingId);
       
       // First delete related queue tracking records
       const { error: queueError } = await supabase
@@ -157,12 +157,12 @@ export const useBookings = () => {
         throw error;
       }
 
-      console.log('Booking deleted successfully, updating local state');
+      // console.log('Booking deleted successfully, updating local state');
       
       // Update local state immediately
       setBookings(prevBookings => {
         const newBookings = prevBookings.filter(booking => booking.id !== bookingId);
-        console.log('Updated bookings count:', newBookings.length);
+        // console.log('Updated bookings count:', newBookings.length);
         return newBookings;
       });
       
@@ -245,7 +245,7 @@ export const useBookings = () => {
       // Find or create doctor for this service
       let doctorId = null;
       if (serviceData.doctor_name) {
-        console.log('Looking for doctor:', serviceData.doctor_name, 'in medical center:', bookingData.medical_center_id);
+        // console.log('Looking for doctor:', serviceData.doctor_name, 'in medical center:', bookingData.medical_center_id);
         
         // First, try to find existing doctor
         const { data: existingDoctor, error: findError } = await supabase
@@ -261,9 +261,9 @@ export const useBookings = () => {
 
         if (existingDoctor) {
           doctorId = existingDoctor.id;
-          console.log('Found existing doctor:', existingDoctor.name, 'with ID:', doctorId);
+            // console.log('Found existing doctor:', existingDoctor.name, 'with ID:', doctorId);
         } else {
-          console.log('Doctor not found, creating new doctor:', serviceData.doctor_name);
+          // console.log('Doctor not found, creating new doctor:', serviceData.doctor_name);
           // Create new doctor if not exists
           const { data: newDoctor, error: doctorError } = await supabase
             .from('doctors')
@@ -281,17 +281,17 @@ export const useBookings = () => {
             // Continue without doctor_id if creation fails
           } else {
             doctorId = newDoctor.id;
-            console.log('Created new doctor:', newDoctor.name, 'with ID:', doctorId);
+              // console.log('Created new doctor:', newDoctor.name, 'with ID:', doctorId);
           }
         }
       } else {
-        console.log('No doctor name in service data, will use general queue');
+        // console.log('No doctor name in service data, will use general queue');
       }
 
       // Get next queue number for the specific doctor (or general if no doctor)
       let nextQueueNumber = 1;
       if (doctorId) {
-        console.log('Getting queue number for doctor:', doctorId, 'on date:', bookingDate);
+        // console.log('Getting queue number for doctor:', doctorId, 'on date:', bookingDate);
         const { data: doctorQueueNumber, error: queueError } = await supabase
           .rpc('get_next_doctor_queue_number', {
             p_medical_center_id: bookingData.medical_center_id,
@@ -304,9 +304,9 @@ export const useBookings = () => {
         }
         
         nextQueueNumber = doctorQueueNumber || 1;
-        console.log('Doctor queue number:', nextQueueNumber);
+        // console.log('Doctor queue number:', nextQueueNumber);
       } else {
-        console.log('Getting general queue number for medical center:', bookingData.medical_center_id, 'on date:', bookingDate);
+        // console.log('Getting general queue number for medical center:', bookingData.medical_center_id, 'on date:', bookingDate);
         // Use general queue number if no doctor
         const { data: generalQueueNumber, error: generalQueueError } = await supabase
           .rpc('get_next_queue_number', {
@@ -319,7 +319,7 @@ export const useBookings = () => {
         }
         
         nextQueueNumber = generalQueueNumber || 1;
-        console.log('General queue number:', nextQueueNumber);
+        // console.log('General queue number:', nextQueueNumber);
       }
 
       // Generate QR code
@@ -331,18 +331,18 @@ export const useBookings = () => {
         throw new Error('خطأ في إنشاء رمز الاستجابة السريعة');
       }
 
-      console.log('Creating booking with data:', {
-        patient_id: user.id,
-        medical_center_id: bookingData.medical_center_id,
-        service_id: bookingData.service_id,
-        doctor_id: doctorId,
-        booking_date: bookingDate,
-        booking_time: bookingTime,
-        queue_number: nextQueueNumber,
-        qr_code: qrCode,
-        status: 'pending',
-        notes: bookingData.notes
-      });
+      // console.log('Creating booking with data:', {
+      //   patient_id: user.id,
+      //   medical_center_id: bookingData.medical_center_id,
+      //   service_id: bookingData.service_id,
+      //   doctor_id: doctorId,
+      //   booking_date: bookingDate,
+      //   booking_time: bookingTime,
+      //   queue_number: nextQueueNumber,
+      //   qr_code: qrCode,
+      //   status: 'pending',
+      //   notes: bookingData.notes
+      // });
 
       // Double-check that we're not creating duplicate queue numbers
       if (doctorId) {
@@ -383,7 +383,7 @@ export const useBookings = () => {
         throw error;
       }
 
-      console.log('Booking created successfully:', booking);
+        // console.log('Booking created successfully:', booking);
 
       // Create queue tracking entry
       const { error: queueError } = await supabase

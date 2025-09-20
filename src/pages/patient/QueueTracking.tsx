@@ -24,13 +24,13 @@ const QueueTracking = () => {
     }
     
     if (!user) {
-      console.log('QueueTracking: User not loaded yet, waiting...', { bookingId });
+        // console.log('QueueTracking: User not loaded yet, waiting...', { bookingId });
       return;
     }
     
     try {
       setLoading(true);
-      console.log('QueueTracking: Fetching booking data for ID:', bookingId);
+        // console.log('QueueTracking: Fetching booking data for ID:', bookingId);
       
       // Get booking details
       const { data: bookingData, error: bookingError } = await supabase
@@ -45,7 +45,7 @@ const QueueTracking = () => {
         throw bookingError;
       }
       
-      console.log('QueueTracking: Booking data fetched successfully:', bookingData);
+        // console.log('QueueTracking: Booking data fetched successfully:', bookingData);
       setBooking(bookingData);
       setMyNumber(bookingData.queue_number);
 

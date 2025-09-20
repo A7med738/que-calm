@@ -37,13 +37,13 @@ export const useUserRole = () => {
 
   const fetchUserRole = useCallback(async () => {
     if (!user) {
-      console.log('No user found, setting loading to false');
+      // console.log('No user found, setting loading to false');
       setUserRole(null);
       setLoading(false);
       return;
     }
 
-    console.log('Fetching user role for user:', user.id);
+    // console.log('Fetching user role for user:', user.id);
 
     try {
       setLoading(true);
@@ -52,7 +52,7 @@ export const useUserRole = () => {
       // Check if user is admin using secure method
       const isAdminUser = await checkAdminUser(user.id);
       if (isAdminUser) {
-        console.log('User is admin - setting admin role');
+        // console.log('User is admin - setting admin role');
         setUserRole({
           id: 'admin-role',
           user_id: user.id,
@@ -99,7 +99,7 @@ export const useUserRole = () => {
     if (!user) return false;
     
     // Check if user role is admin
-    console.log('User role from database:', userRole?.role);
+    // console.log('User role from database:', userRole?.role);
     return userRole?.role === 'admin';
   };
 
