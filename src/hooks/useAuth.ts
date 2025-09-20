@@ -53,8 +53,30 @@ export function useAuth() {
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    return { error };
+    try {
+      // Clear local storage first
+      localStorage.removeItem('clinic_session');
+      localStorage.removeItem('supabase.auth.token');
+      
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut({
+        scope: 'local' // Use local scope instead of global
+      });
+      
+      // Clear user state immediately
+      setUser(null);
+      setSession(null);
+      
+      return { error };
+    } catch (err) {
+      console.error('Error during sign out:', err);
+      // Even if there's an error, clear local state
+      setUser(null);
+      setSession(null);
+      localStorage.removeItem('clinic_session');
+      localStorage.removeItem('supabase.auth.token');
+      return { error: err as Error };
+    }
   };
 
   return {

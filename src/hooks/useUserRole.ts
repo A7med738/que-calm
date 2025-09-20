@@ -10,6 +10,25 @@ export interface UserRole {
   updated_at: string;
 }
 
+// Secure admin check function
+const checkAdminUser = async (userId: string): Promise<boolean> => {
+  try {
+    // Use a secure RPC function to check admin status
+    const { data, error } = await supabase
+      .rpc('check_admin_user', { user_uuid: userId });
+    
+    if (error) {
+      console.warn('Error checking admin status:', error);
+      return false;
+    }
+    
+    return data === true;
+  } catch (err) {
+    console.warn('Exception checking admin status:', err);
+    return false;
+  }
+};
+
 export const useUserRole = () => {
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
@@ -24,25 +43,26 @@ export const useUserRole = () => {
       return;
     }
 
-    // Check if user is the specific admin user - no need to fetch from database
-    if (user.id === '130f849a-d894-4ce6-a78e-0df3812093de') {
-      console.log('User is the specific admin user - setting admin role directly');
-      setUserRole({
-        id: 'admin-role',
-        user_id: user.id,
-        role: 'admin',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      });
-      setLoading(false);
-      return;
-    }
-
     console.log('Fetching user role for user:', user.id);
 
     try {
       setLoading(true);
       setError(null);
+
+      // Check if user is admin using secure method
+      const isAdminUser = await checkAdminUser(user.id);
+      if (isAdminUser) {
+        console.log('User is admin - setting admin role');
+        setUserRole({
+          id: 'admin-role',
+          user_id: user.id,
+          role: 'admin',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+        setLoading(false);
+        return;
+      }
 
       // Use the safe function to get user role
       const { data: roleData, error: roleError } = await supabase
@@ -75,12 +95,16 @@ export const useUserRole = () => {
     }
   };
 
-  const isAdmin = () => {
-    // Check if user is the specific admin user - ALWAYS return true for this user
-    if (user?.id === '130f849a-d894-4ce6-a78e-0df3812093de') {
-      console.log('User is the specific admin user - ALWAYS ADMIN');
+  const isAdmin = async () => {
+    if (!user) return false;
+    
+    // Use secure method to check admin status
+    const isAdminUser = await checkAdminUser(user.id);
+    if (isAdminUser) {
+      console.log('User is admin');
       return true;
     }
+    
     console.log('User role from database:', userRole?.role);
     return userRole?.role === 'admin';
   };
@@ -93,9 +117,11 @@ export const useUserRole = () => {
     return userRole?.role === 'patient' || !userRole; // Default to patient if no role
   };
 
-  const hasRole = (role: 'admin' | 'clinic_admin' | 'patient') => {
-    if (role === 'admin' && user?.id === '130f849a-d894-4ce6-a78e-0df3812093de') {
-      return true;
+  const hasRole = async (role: 'admin' | 'clinic_admin' | 'patient') => {
+    if (role === 'admin') {
+      if (!user) return false;
+      const isAdminUser = await checkAdminUser(user.id);
+      return isAdminUser;
     }
     return userRole?.role === role;
   };

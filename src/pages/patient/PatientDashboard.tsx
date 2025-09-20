@@ -79,14 +79,18 @@ const PatientDashboard = () => {
   }, [profile]);
 
   const handleSignOut = async () => {
-    const { error } = await signOut();
-    if (error) {
-      toast({
-        title: "خطأ في تسجيل الخروج",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
+    try {
+      const { error } = await signOut();
+      if (error) {
+        console.warn('Sign out error (but continuing):', error);
+        // Even if there's an error, we should still redirect
+        // The user state should be cleared by the signOut function
+      }
+      // Always redirect to login page
+      navigate("/patient/login");
+    } catch (err) {
+      console.error('Unexpected error during sign out:', err);
+      // Still redirect even if there's an unexpected error
       navigate("/patient/login");
     }
   };

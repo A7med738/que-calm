@@ -88,10 +88,16 @@ const AdminDirect = () => {
 
   const handleSignOut = async () => {
     try {
-      await signOut();
+      const { error } = await signOut();
+      if (error) {
+        console.warn('Sign out error (but continuing):', error);
+      }
+      // Always redirect even if there's an error
       navigate("/");
     } catch (error) {
-      console.error("Error signing out:", error);
+      console.error("Unexpected error signing out:", error);
+      // Still redirect even if there's an unexpected error
+      navigate("/");
     }
   };
 
