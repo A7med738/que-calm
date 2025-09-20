@@ -237,16 +237,33 @@ export const useBookings = () => {
       }
 
       // Get next queue number for the specific doctor (or general if no doctor)
-      const { data: nextQueueNumber } = await supabase
-        .rpc('get_next_doctor_queue_number', {
-          p_medical_center_id: bookingData.medical_center_id,
-          p_doctor_id: doctorId,
-          p_booking_date: bookingDate
-        });
+      let nextQueueNumber = 1;
+      if (doctorId) {
+        const { data: doctorQueueNumber } = await supabase
+          .rpc('get_next_doctor_queue_number', {
+            p_medical_center_id: bookingData.medical_center_id,
+            p_doctor_id: doctorId,
+            p_booking_date: bookingDate
+          });
+        nextQueueNumber = doctorQueueNumber || 1;
+      } else {
+        // Use general queue number if no doctor
+        const { data: generalQueueNumber } = await supabase
+          .rpc('get_next_queue_number', {
+            p_medical_center_id: bookingData.medical_center_id,
+            p_booking_date: bookingDate
+          });
+        nextQueueNumber = generalQueueNumber || 1;
+      }
 
       // Generate QR code
-      const { data: qrCode } = await supabase
+      const { data: qrCode, error: qrError } = await supabase
         .rpc('generate_booking_qr_code');
+
+      if (qrError) {
+        console.error('Error generating QR code:', qrError);
+        throw new Error('خطأ في إنشاء رمز الاستجابة السريعة');
+      }
 
       console.log('Creating booking with data:', {
         patient_id: user.id,
@@ -255,7 +272,7 @@ export const useBookings = () => {
         doctor_id: doctorId,
         booking_date: bookingDate,
         booking_time: bookingTime,
-        queue_number: nextQueueNumber || 1,
+        queue_number: nextQueueNumber,
         qr_code: qrCode,
         status: 'pending',
         notes: bookingData.notes
@@ -271,7 +288,7 @@ export const useBookings = () => {
           doctor_id: doctorId,
           booking_date: bookingDate,
           booking_time: bookingTime,
-          queue_number: nextQueueNumber || 1,
+          queue_number: nextQueueNumber,
           qr_code: qrCode,
           status: 'pending',
           notes: bookingData.notes
@@ -280,33 +297,51 @@ export const useBookings = () => {
         .single();
 
       if (error) {
+        console.error('Error creating booking:', error);
         throw error;
       }
 
-        // Create queue tracking entry
-        await supabase
-          .from('queue_tracking')
-          .insert({
-            booking_id: booking.id,
-            current_number: 0,
-            waiting_count: 0,
-            status: 'waiting'
-          });
+      console.log('Booking created successfully:', booking);
 
-        // Create notification for the patient
-        await supabase
-          .rpc('create_booking_notification', {
-            p_patient_id: user.id,
-            p_booking_id: booking.id,
-            p_title: 'حجز جديد',
-            p_message: 'تم إنشاء حجز جديد في المركز الطبي',
-            p_type: 'booking_confirmed'
-          });
+      // Create queue tracking entry
+      const { error: queueError } = await supabase
+        .from('queue_tracking')
+        .insert({
+          booking_id: booking.id,
+          current_number: 0,
+          waiting_count: 0,
+          status: 'waiting'
+        });
 
-        // Refresh bookings list
+      if (queueError) {
+        console.error('Error creating queue tracking:', queueError);
+        // Don't throw error here, booking is already created
+      }
+
+      // Create notification for the patient
+      const { error: notificationError } = await supabase
+        .rpc('create_booking_notification', {
+          p_patient_id: user.id,
+          p_booking_id: booking.id,
+          p_title: 'حجز جديد',
+          p_message: 'تم إنشاء حجز جديد في المركز الطبي',
+          p_type: 'booking_confirmed'
+        });
+
+      if (notificationError) {
+        console.error('Error creating notification:', notificationError);
+        // Don't throw error here, booking is already created
+      }
+
+      // Refresh bookings list
+      try {
         await fetchBookings();
+      } catch (fetchError) {
+        console.error('Error refreshing bookings:', fetchError);
+        // Don't throw error here, booking is already created
+      }
 
-        return booking;
+      return booking;
     } catch (err) {
       console.error('Error creating booking:', err);
       throw err;
