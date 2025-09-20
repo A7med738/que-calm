@@ -31,9 +31,8 @@ export const useMedicalCenters = () => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('medical_centers_with_stats')
+        .from('patient_medical_centers_with_stats')
         .select('*')
-        .eq('status', 'active')
         .order('average_rating', { ascending: false, nullsLast: true });
 
       if (error) {
@@ -67,9 +66,8 @@ export const useMedicalCenters = () => {
       setError(null);
 
       const { data, error } = await supabase
-        .from('medical_centers_with_stats')
+        .from('patient_medical_centers_with_stats')
         .select('*')
-        .eq('status', 'active')
         .or(`name.ilike.%${query}%,specialty.ilike.%${query}%`)
         .order('average_rating', { ascending: false, nullsLast: true });
 

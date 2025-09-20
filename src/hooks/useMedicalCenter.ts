@@ -21,8 +21,8 @@ export interface Service {
   name: string;
   description?: string;
   price: number;
-  duration_minutes: number;
   doctor_name?: string;
+  doctor_specialty?: string;
   waiting_count?: number;
 }
 
@@ -56,17 +56,13 @@ export const useMedicalCenter = (centerId: string) => {
 
       setCenter(centerData);
 
-      // Fetch services with doctor names
+      // Fetch services (doctor names are now stored directly in services table)
       const { data: servicesData, error: servicesError } = await supabase
         .from('services')
-        .select(`
-          *,
-          doctors (
-            name
-          )
-        `)
+        .select('*')
         .eq('medical_center_id', centerId)
-        .eq('status', 'active');
+        .eq('status', 'active')
+        .eq('is_active', true);
 
       if (servicesError) {
         throw servicesError;
@@ -78,8 +74,8 @@ export const useMedicalCenter = (centerId: string) => {
         name: service.name,
         description: service.description,
         price: service.price,
-        duration_minutes: service.duration_minutes,
-        doctor_name: service.doctors?.name,
+        doctor_name: service.doctor_name,
+        doctor_specialty: service.doctor_specialty,
         waiting_count: Math.floor(Math.random() * 10) + 1 // Mock waiting count for now
       })) || [];
 

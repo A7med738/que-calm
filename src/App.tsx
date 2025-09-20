@@ -10,6 +10,7 @@ import CenterDetails from "./pages/patient/CenterDetails";
 import QueueTracking from "./pages/patient/QueueTracking";
 import ClinicDashboard from "./pages/clinic/ClinicDashboard";
 import ClinicAuthSimple from "./pages/clinic/ClinicAuthSimple";
+import ClinicLogin from "./pages/clinic/ClinicLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import SetAdmin from "./pages/SetAdmin";
 import AdminDirect from "./pages/AdminDirect";
@@ -29,6 +30,7 @@ const App = () => (
           <Route path="/patient/dashboard" element={<PatientDashboard />} />
           <Route path="/patient/center/:id" element={<CenterDetails />} />
           <Route path="/patient/queue/:bookingId" element={<QueueTracking />} />
+          <Route path="/clinic/login" element={<ClinicLogin />} />
           <Route path="/clinic/auth" element={<ClinicAuthSimple />} />
           <Route path="/clinic/dashboard" element={<ClinicDashboard />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />

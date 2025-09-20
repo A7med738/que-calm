@@ -98,6 +98,7 @@ export const useBookings = () => {
 
       if (queueError) {
         console.error('Error deleting queue tracking:', queueError);
+        // Don't throw error here, continue with booking deletion
       }
 
       // Then delete the booking

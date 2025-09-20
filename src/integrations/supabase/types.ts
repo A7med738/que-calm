@@ -241,6 +241,8 @@ export type Database = {
           specialty: string
           status: string
           updated_at: string
+          owner_id: string | null
+          admin_id: string | null
         }
         Insert: {
           address: string
@@ -257,6 +259,8 @@ export type Database = {
           specialty: string
           status?: string
           updated_at?: string
+          owner_id?: string | null
+          admin_id?: string | null
         }
         Update: {
           address?: string
@@ -273,6 +277,8 @@ export type Database = {
           specialty?: string
           status?: string
           updated_at?: string
+          owner_id?: string | null
+          admin_id?: string | null
         }
         Relationships: []
       }
@@ -465,9 +471,10 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
-          doctor_id: string | null
-          duration_minutes: number
+          doctor_name: string | null
+          doctor_specialty: string | null
           id: string
+          is_active: boolean
           medical_center_id: string
           name: string
           price: number
@@ -477,9 +484,10 @@ export type Database = {
         Insert: {
           created_at?: string
           description?: string | null
-          doctor_id?: string | null
-          duration_minutes?: number
+          doctor_name?: string | null
+          doctor_specialty?: string | null
           id?: string
+          is_active?: boolean
           medical_center_id: string
           name: string
           price: number
@@ -489,9 +497,10 @@ export type Database = {
         Update: {
           created_at?: string
           description?: string | null
-          doctor_id?: string | null
-          duration_minutes?: number
+          doctor_name?: string | null
+          doctor_specialty?: string | null
           id?: string
+          is_active?: boolean
           medical_center_id?: string
           name?: string
           price?: number
@@ -499,13 +508,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "services_doctor_id_fkey"
-            columns: ["doctor_id"]
-            isOneToOne: false
-            referencedRelation: "doctors"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "services_medical_center_id_fkey"
             columns: ["medical_center_id"]
@@ -579,6 +581,47 @@ export type Database = {
     CompositeTypes: {
       [_ in never]: never
     }
+      audit_logs: {
+        Row: {
+          id: string
+          user_id: string | null
+          medical_center_id: string | null
+          action: string
+          table_name: string
+          record_id: string | null
+          old_values: any | null
+          new_values: any | null
+          ip_address: string | null
+          user_agent: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          medical_center_id?: string | null
+          action: string
+          table_name: string
+          record_id?: string | null
+          old_values?: any | null
+          new_values?: any | null
+          ip_address?: string | null
+          user_agent?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          medical_center_id?: string | null
+          action?: string
+          table_name?: string
+          record_id?: string | null
+          old_values?: any | null
+          new_values?: any | null
+          ip_address?: string | null
+          user_agent?: string | null
+          created_at?: string
+        }
+      }
   }
 }
 

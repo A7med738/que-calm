@@ -7,12 +7,14 @@ import { Label } from "@/components/ui/label";
 import { ArrowRight, Building2, Hash } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 const ClinicAuthSimple = () => {
   const [serialNumber, setSerialNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,6 +23,11 @@ const ClinicAuthSimple = () => {
     try {
       if (!serialNumber.trim()) {
         throw new Error('الرقم التسلسلي مطلوب');
+      }
+
+      // التحقق من وجود مستخدم مسجل دخول (مطلوب للنظام الآمن)
+      if (!user) {
+        throw new Error('يجب تسجيل الدخول أولاً كمركز طبي. يرجى تسجيل الدخول من الصفحة الرئيسية.');
       }
 
       // البحث عن المركز الطبي بالرقم التسلسلي
@@ -35,15 +42,50 @@ const ClinicAuthSimple = () => {
         throw new Error('الرقم التسلسلي غير صحيح أو المركز غير نشط');
       }
 
-      // إنشاء جلسة مؤقتة للمركز
+      // ربط المركز بالمستخدم (النظام الآمن)
+      if (!medicalCenter.owner_id) {
+        // ربط تلقائي للمركز الجديد
+        const { error: updateError } = await supabase
+          .from('medical_centers')
+          .update({ owner_id: user.id })
+          .eq('id', medicalCenter.id);
+
+        if (updateError) {
+          console.error('Error linking center to user:', updateError);
+          throw new Error('خطأ في ربط المركز بالمستخدم');
+        } else {
+          // تحديث بيانات المركز المحلية
+          medicalCenter.owner_id = user.id;
+        }
+      } else if (medicalCenter.owner_id !== user.id) {
+        throw new Error('هذا المركز مربوط بمستخدم آخر. لا يمكنك الوصول إليه.');
+      }
+
+      // إنشاء جلسة آمنة للمركز
       const clinicSession = {
         medical_center: medicalCenter,
         serial_number: serialNumber,
+        user_id: user.id, // مضمون وجوده في النظام الآمن
         login_time: new Date().toISOString()
       };
 
       // حفظ الجلسة في localStorage
       localStorage.setItem('clinic_session', JSON.stringify(clinicSession));
+
+      // تسجيل عملية تسجيل الدخول في سجل الأنشطة
+      try {
+        await supabase.rpc('log_audit_event', {
+          p_user_id: user.id,
+          p_medical_center_id: medicalCenter.id,
+          p_action: 'LOGIN',
+          p_table_name: 'medical_centers',
+          p_record_id: medicalCenter.id,
+          p_new_values: { login_time: new Date().toISOString() }
+        });
+      } catch (auditError) {
+        console.error('Error logging audit event:', auditError);
+        // لا نوقف العملية إذا فشل تسجيل السجل
+      }
 
       toast({
         title: "تم تسجيل الدخول بنجاح",
@@ -78,6 +120,16 @@ const ClinicAuthSimple = () => {
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">
             دخول المركز الطبي
           </h1>
+          {!user && (
+            <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm text-amber-800">
+                <strong>تنبيه:</strong> يجب تسجيل الدخول أولاً من الصفحة الرئيسية قبل الدخول كمركز طبي.
+              </p>
+              <Link to="/" className="inline-block mt-2 text-sm text-amber-600 hover:text-amber-800 underline">
+                تسجيل الدخول الآن
+              </Link>
+            </div>
+          )}
         </div>
 
         <Card className="shadow-lg border-0">
@@ -103,6 +155,7 @@ const ClinicAuthSimple = () => {
                     onChange={(e) => setSerialNumber(e.target.value)}
                     placeholder="أدخل الرقم التسلسلي"
                     required
+                    disabled={!user}
                     className="pr-9 sm:pr-10 text-right text-sm sm:text-base"
                   />
                 </div>
@@ -115,9 +168,9 @@ const ClinicAuthSimple = () => {
                 type="submit"
                 className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium text-sm sm:text-base"
                 size="lg"
-                disabled={loading}
+                disabled={loading || !user}
               >
-                {loading ? "جاري تسجيل الدخول..." : "تسجيل الدخول"}
+                {loading ? "جاري تسجيل الدخول..." : !user ? "يجب تسجيل الدخول أولاً" : "تسجيل الدخول"}
               </Button>
             </form>
 

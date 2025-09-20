@@ -43,16 +43,31 @@ export const useAdminCenters = () => {
       setLoading(true);
       setError(null);
 
+      // Use direct table query instead of view to avoid RLS issues
       const { data, error } = await supabase
-        .from('medical_centers_with_stats')
-        .select('*')
+        .from('medical_centers')
+        .select(`
+          *,
+          doctors:doctors(count),
+          services:services(count),
+          reviews:reviews(count)
+        `)
         .order('created_at', { ascending: false });
 
       if (error) {
         throw error;
       }
 
-      setCenters(data || []);
+      // Transform data to match expected format
+      const transformedData = data?.map(center => ({
+        ...center,
+        doctor_count: center.doctors?.[0]?.count || 0,
+        service_count: center.services?.[0]?.count || 0,
+        review_count: center.reviews?.[0]?.count || 0,
+        average_rating: 0 // Will be calculated separately if needed
+      })) || [];
+
+      setCenters(transformedData);
     } catch (err) {
       console.error('Error fetching medical centers:', err);
       setError(err instanceof Error ? err.message : 'حدث خطأ في جلب المراكز الطبية');
@@ -68,15 +83,15 @@ export const useAdminCenters = () => {
       // Call the database function to create medical center
       const { data, error } = await supabase
         .rpc('create_medical_center_with_admin', {
-          p_name: centerData.name,
-          p_specialty: centerData.specialty,
-          p_address: centerData.address,
-          p_phone: centerData.phone,
-          p_email: centerData.email,
-          p_hours: centerData.hours,
-          p_description: centerData.description,
-          p_admin_email: centerData.admin_email,
-          p_admin_password: centerData.admin_password
+          center_name: centerData.name,
+          center_specialty: centerData.specialty,
+          center_address: centerData.address,
+          center_phone: centerData.phone,
+          center_email: centerData.email,
+          center_hours: centerData.hours,
+          center_description: centerData.description,
+          admin_email: centerData.admin_email,
+          admin_password: centerData.admin_password
         });
 
       if (error) {
@@ -86,7 +101,14 @@ export const useAdminCenters = () => {
       // Refresh the centers list
       await fetchCenters();
 
-      return data;
+      // Return the data with serial number for display
+      return {
+        serial_number: data.serial_number,
+        center_id: data.center_id,
+        admin_email: data.admin_email,
+        admin_password: data.admin_password,
+        message: data.message
+      };
     } catch (err) {
       console.error('Error creating medical center:', err);
       const errorMessage = err instanceof Error ? err.message : 'حدث خطأ في إنشاء المركز الطبي';
@@ -124,6 +146,7 @@ export const useAdminCenters = () => {
     try {
       setError(null);
 
+      // Simple delete - the foreign key constraints should handle cascading now
       const { error } = await supabase
         .from('medical_centers')
         .delete()

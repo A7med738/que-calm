@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Users, Clock, User, SkipForward, CheckCircle, Settings, Stethoscope } from "lucide-react";
+import ServicesManagement from "@/components/clinic/ServicesManagement";
+import { supabase } from "@/integrations/supabase/client";
 
 // Mock queue data
 const queueData = [
@@ -31,9 +33,19 @@ const ClinicDashboard = () => {
 
     try {
       const parsedSession = JSON.parse(session);
+      
+      // التحقق من صحة الجلسة (النظام الآمن)
+      if (!parsedSession.medical_center || !parsedSession.user_id) {
+        console.error('Invalid clinic session - missing required data');
+        localStorage.removeItem('clinic_session');
+        navigate('/clinic/auth');
+        return;
+      }
+
       setClinicSession(parsedSession);
     } catch (error) {
       console.error('Error parsing clinic session:', error);
+      localStorage.removeItem('clinic_session');
       navigate('/clinic/auth');
     }
   }, [navigate]);
@@ -57,7 +69,24 @@ const ClinicDashboard = () => {
     }
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    // تسجيل عملية تسجيل الخروج في سجل الأنشطة
+    if (clinicSession?.user_id && clinicSession?.medical_center?.id) {
+      try {
+        await supabase.rpc('log_audit_event', {
+          p_user_id: clinicSession.user_id,
+          p_medical_center_id: clinicSession.medical_center.id,
+          p_action: 'LOGOUT',
+          p_table_name: 'medical_centers',
+          p_record_id: clinicSession.medical_center.id,
+          p_new_values: { logout_time: new Date().toISOString() }
+        });
+      } catch (auditError) {
+        console.error('Error logging logout audit event:', auditError);
+        // لا نوقف العملية إذا فشل تسجيل السجل
+      }
+    }
+
     localStorage.removeItem('clinic_session');
     navigate('/clinic/auth');
   };
@@ -73,7 +102,7 @@ const ClinicDashboard = () => {
 
   const tabs = [
     { id: "queue", label: "الطابور المباشر", icon: Users },
-    { id: "services", label: "الخدمات", icon: Stethoscope },
+    { id: "services", label: "إدارة الخدمات", icon: Stethoscope },
     { id: "settings", label: "الإعدادات", icon: Settings }
   ];
 
@@ -235,18 +264,10 @@ const ClinicDashboard = () => {
 
           {selectedTab === "services" && (
             <div className="space-y-4 sm:space-y-6">
-              <Card>
-                <CardHeader className="pb-3 sm:pb-6">
-                  <CardTitle className="text-lg sm:text-xl">إدارة الخدمات</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground text-center py-6 sm:py-8 text-sm sm:text-base">
-                    قريباً - صفحة إدارة الخدمات
-                  </p>
-                </CardContent>
-              </Card>
+              <ServicesManagement medicalCenterId={clinicSession?.medical_center?.id || ''} />
             </div>
           )}
+
 
           {selectedTab === "settings" && (
             <div className="space-y-4 sm:space-y-6">

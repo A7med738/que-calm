@@ -48,7 +48,14 @@ const Index = () => {
                   <p className="text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6 leading-relaxed">
                     أدر طوابير مركزك الطبي بفعالية ونظم مواعيد المرضى
                   </p>
-                  <Link to="/clinic/auth">
+                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-xs text-blue-800">
+                      <strong>خطوات الدخول:</strong><br/>
+                      1. سجل دخولك من هنا أولاً<br/>
+                      2. ثم ادخل الرقم التسلسلي للمركز
+                    </p>
+                  </div>
+                  <Link to="/clinic/login">
                     <Button size="lg" variant="outline" className="w-full border-primary text-primary hover:bg-primary hover:text-primary-foreground font-medium text-sm sm:text-base">
                       تسجيل الدخول كمركز طبي
                     </Button>

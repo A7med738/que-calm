@@ -101,7 +101,7 @@ const AdminDirect = () => {
       
       toast({
         title: "تم إنشاء المركز بنجاح",
-        description: `تم إنشاء المركز الطبي "${newCenter.name}" بنجاح. الرقم التسلسلي: ${result.serial_number}`,
+        description: `تم إنشاء المركز الطبي "${newCenter.name}" بنجاح. الرقم التسلسلي: ${result.serial_number}. يرجى تسجيل الدخول كمدير باستخدام: ${result.admin_email}`,
       });
 
       // Reset form
