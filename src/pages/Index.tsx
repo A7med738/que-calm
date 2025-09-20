@@ -48,7 +48,7 @@ const Index = () => {
                   <p className="text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6 leading-relaxed">
                     أدر طوابير مركزك الطبي بفعالية ونظم مواعيد المرضى
                   </p>
-                  <Link to="/clinic/login">
+                  <Link to="/clinic/auth">
                     <Button size="lg" variant="outline" className="w-full border-primary text-primary hover:bg-primary hover:text-primary-foreground font-medium text-sm sm:text-base">
                       تسجيل الدخول كمركز طبي
                     </Button>
@@ -95,6 +95,7 @@ const Index = () => {
           </div>
         </div>
       </div>
+
     </div>
   );
 };

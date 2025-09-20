@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,25 @@ const ClinicDashboard = () => {
   const [queue, setQueue] = useState(queueData);
   const [currentPatient, setCurrentPatient] = useState(queue[0]);
   const [selectedTab, setSelectedTab] = useState("queue");
+  const [clinicSession, setClinicSession] = useState<any>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // تحقق من وجود جلسة المركز
+    const session = localStorage.getItem('clinic_session');
+    if (!session) {
+      navigate('/clinic/auth');
+      return;
+    }
+
+    try {
+      const parsedSession = JSON.parse(session);
+      setClinicSession(parsedSession);
+    } catch (error) {
+      console.error('Error parsing clinic session:', error);
+      navigate('/clinic/auth');
+    }
+  }, [navigate]);
 
   const handleNextPatient = () => {
     const currentIndex = queue.findIndex(p => p.id === currentPatient?.id);
@@ -37,11 +57,16 @@ const ClinicDashboard = () => {
     }
   };
 
+  const handleSignOut = () => {
+    localStorage.removeItem('clinic_session');
+    navigate('/clinic/auth');
+  };
+
   const waitingPatients = queue.filter(p => p.status === "waiting");
   const totalWaiting = waitingPatients.length;
 
   const clinicInfo = {
-    name: "عيادة الدكتور محمد أحمد",
+    name: clinicSession?.medical_center?.name || "عيادة الدكتور محمد أحمد",
     todayPatients: 28,
     currentStatus: "مفتوح"
   };
@@ -65,9 +90,14 @@ const ClinicDashboard = () => {
                 <Badge className="bg-accent text-accent-foreground text-xs">{clinicInfo.currentStatus}</Badge>
               </div>
             </div>
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={handleSignOut}>
+                تسجيل الخروج
+              </Button>
+              <Button variant="ghost" size="sm">
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>

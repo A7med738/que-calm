@@ -8,8 +8,11 @@ import PatientLogin from "./pages/patient/PatientLogin";
 import PatientDashboard from "./pages/patient/PatientDashboard";
 import CenterDetails from "./pages/patient/CenterDetails";
 import QueueTracking from "./pages/patient/QueueTracking";
-import ClinicLogin from "./pages/clinic/ClinicLogin";
 import ClinicDashboard from "./pages/clinic/ClinicDashboard";
+import ClinicAuthSimple from "./pages/clinic/ClinicAuthSimple";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import SetAdmin from "./pages/SetAdmin";
+import AdminDirect from "./pages/AdminDirect";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,8 +29,11 @@ const App = () => (
           <Route path="/patient/dashboard" element={<PatientDashboard />} />
           <Route path="/patient/center/:id" element={<CenterDetails />} />
           <Route path="/patient/queue/:bookingId" element={<QueueTracking />} />
-          <Route path="/clinic/login" element={<ClinicLogin />} />
+          <Route path="/clinic/auth" element={<ClinicAuthSimple />} />
           <Route path="/clinic/dashboard" element={<ClinicDashboard />} />
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          <Route path="/admin-direct" element={<AdminDirect />} />
+          <Route path="/set-admin" element={<SetAdmin />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

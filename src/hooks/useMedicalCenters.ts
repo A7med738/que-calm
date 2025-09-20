@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface MedicalCenter {
@@ -25,7 +25,7 @@ export const useMedicalCenters = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchCenters = async () => {
+  const fetchCenters = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -40,16 +40,23 @@ export const useMedicalCenters = () => {
         throw error;
       }
 
-      setCenters(data || []);
+      // Only update if data has changed
+      setCenters(prevCenters => {
+        const newData = data || [];
+        if (JSON.stringify(prevCenters) === JSON.stringify(newData)) {
+          return prevCenters;
+        }
+        return newData;
+      });
     } catch (err) {
       console.error('Error fetching medical centers:', err);
       setError(err instanceof Error ? err.message : 'حدث خطأ في جلب المراكز الطبية');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const searchCenters = async (query: string) => {
+  const searchCenters = useCallback(async (query: string) => {
     if (!query.trim()) {
       await fetchCenters();
       return;
@@ -70,14 +77,21 @@ export const useMedicalCenters = () => {
         throw error;
       }
 
-      setCenters(data || []);
+      // Only update if data has changed
+      setCenters(prevCenters => {
+        const newData = data || [];
+        if (JSON.stringify(prevCenters) === JSON.stringify(newData)) {
+          return prevCenters;
+        }
+        return newData;
+      });
     } catch (err) {
       console.error('Error searching medical centers:', err);
       setError(err instanceof Error ? err.message : 'حدث خطأ في البحث');
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchCenters]);
 
   useEffect(() => {
     fetchCenters();

@@ -70,11 +70,59 @@ export const useBookings = () => {
         throw error;
       }
 
-      // Refresh bookings after cancellation
-      await fetchBookings();
+      // Update local state immediately
+      setBookings(prevBookings => 
+        prevBookings.map(booking => 
+          booking.id === bookingId 
+            ? { ...booking, status: 'cancelled' }
+            : booking
+        )
+      );
+      
       return true;
     } catch (err) {
       console.error('Error cancelling booking:', err);
+      throw err;
+    }
+  };
+
+  const deleteBooking = async (bookingId: string) => {
+    try {
+      console.log('Deleting booking:', bookingId);
+      
+      // First delete related queue tracking records
+      const { error: queueError } = await supabase
+        .from('queue_tracking')
+        .delete()
+        .eq('booking_id', bookingId);
+
+      if (queueError) {
+        console.error('Error deleting queue tracking:', queueError);
+      }
+
+      // Then delete the booking
+      const { error } = await supabase
+        .from('bookings')
+        .delete()
+        .eq('id', bookingId);
+
+      if (error) {
+        console.error('Error deleting booking:', error);
+        throw error;
+      }
+
+      console.log('Booking deleted successfully, updating local state');
+      
+      // Update local state immediately
+      setBookings(prevBookings => {
+        const newBookings = prevBookings.filter(booking => booking.id !== bookingId);
+        console.log('Updated bookings count:', newBookings.length);
+        return newBookings;
+      });
+      
+      return true;
+    } catch (err) {
+      console.error('Error deleting booking:', err);
       throw err;
     }
   };
@@ -89,5 +137,6 @@ export const useBookings = () => {
     error,
     refetch: fetchBookings,
     cancelBooking,
+    deleteBooking,
   };
 };

@@ -4,11 +4,23 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, MapPin, Star, Users, Building2, Plus, User, Calendar, Heart, Clock, X, CheckCircle } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Search, MapPin, Star, Users, Building2, Plus, User, Calendar, Heart, Clock, X, CheckCircle, Trash2, Shield } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useBookings } from "@/hooks/useBookings";
 import { useMedicalCenters } from "@/hooks/useMedicalCenters";
+import { useUserRole } from "@/hooks/useUserRole";
 import { useToast } from "@/hooks/use-toast";
 
 const PatientDashboard = () => {
@@ -17,8 +29,9 @@ const PatientDashboard = () => {
   const [favoriteCenters, setFavoriteCenters] = useState<number[]>([]);
   const { user, signOut, loading: authLoading } = useAuth();
   const { profile, familyMembers, loading: profileLoading } = useProfile();
-  const { bookings, loading: bookingsLoading, cancelBooking } = useBookings();
+  const { bookings, loading: bookingsLoading, cancelBooking, deleteBooking } = useBookings();
   const { centers, loading: centersLoading, search } = useMedicalCenters();
+  const { isAdmin, isClinicAdmin } = useUserRole();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -76,6 +89,25 @@ const PatientDashboard = () => {
     }
   };
 
+  const handleDeleteBooking = async (bookingId: string) => {
+    try {
+      console.log('handleDeleteBooking called with ID:', bookingId);
+      await deleteBooking(bookingId);
+      console.log('deleteBooking completed successfully');
+      toast({
+        title: "تم حذف الحجز",
+        description: "تم حذف الحجز نهائياً من قائمة حجوزاتك",
+      });
+    } catch (error) {
+      console.error('Error in handleDeleteBooking:', error);
+      toast({
+        title: "خطأ في حذف الحجز",
+        description: "حدث خطأ أثناء حذف الحجز، حاول مرة أخرى",
+        variant: "destructive",
+      });
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending':
@@ -121,7 +153,7 @@ const PatientDashboard = () => {
     }, 300); // Debounce search
 
     return () => clearTimeout(timeoutId);
-  }, [searchQuery, search]);
+  }, [searchQuery]); // Removed 'search' from dependencies
 
   if (authLoading || profileLoading) {
     return (
@@ -287,7 +319,22 @@ const PatientDashboard = () => {
             <h1 className="text-2xl font-bold text-foreground mb-2">
               {profile?.full_name || "عزيزي المستخدم"}
             </h1>
-            <p className="text-muted-foreground">عضو منذ {new Date().getFullYear()}</p>
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <p className="text-muted-foreground">عضو منذ {new Date().getFullYear()}</p>
+              {/* Role Badge */}
+              {isAdmin() && (
+                <Badge className="bg-primary/10 text-primary border-primary/20">
+                  <Shield className="h-3 w-3 mr-1" />
+                  مدير النظام
+                </Badge>
+              )}
+              {isClinicAdmin() && (
+                <Badge className="bg-accent/10 text-accent border-accent/20">
+                  <Building2 className="h-3 w-3 mr-1" />
+                  مدير مركز
+                </Badge>
+              )}
+            </div>
           </div>
 
           {/* Profile Information */}
@@ -380,6 +427,30 @@ const PatientDashboard = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-3">
+                  {/* Admin Dashboard Button - Only show for admins */}
+                  {isAdmin() && (
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start gap-2 bg-primary/5 border-primary/20 hover:bg-primary/10"
+                      onClick={() => navigate("/admin/dashboard")}
+                    >
+                      <Shield className="h-4 w-4 text-primary" />
+                      لوحة تحكم الإدارة
+                    </Button>
+                  )}
+                  
+                  {/* Clinic Dashboard Button - Only show for clinic admins */}
+                  {isClinicAdmin() && (
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start gap-2 bg-accent/5 border-accent/20 hover:bg-accent/10"
+                      onClick={() => navigate("/clinic/dashboard")}
+                    >
+                      <Building2 className="h-4 w-4 text-accent" />
+                      لوحة تحكم المركز
+                    </Button>
+                  )}
+                  
                   <Button variant="outline" className="w-full justify-start gap-2">
                     <User className="h-4 w-4" />
                     تغيير كلمة المرور
@@ -607,6 +678,36 @@ const PatientDashboard = () => {
                             <Building2 className="h-4 w-4 mr-2" />
                             عرض المركز
                           </Button>
+                          
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                حذف نهائي
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>تأكيد الحذف</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  هل أنت متأكد من حذف هذا الحجز نهائياً؟ لا يمكن التراجع عن هذا الإجراء.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteBooking(booking.id)}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  حذف نهائي
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </div>
                       </div>
                     </div>
