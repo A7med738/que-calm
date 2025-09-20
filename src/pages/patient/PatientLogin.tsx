@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowRight, Users, Mail, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 const PatientLogin = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -13,26 +14,84 @@ const PatientLogin = () => {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, signUp, signIn, loading } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (isLogin) {
-      // Simulate login
-      toast({
-        title: "تم تسجيل الدخول بنجاح",
-        description: "مرحباً بك في نظام نخبة الطب",
-      });
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user && !loading) {
       navigate("/patient/dashboard");
-    } else {
-      // Simulate registration
+    }
+  }, [user, loading, navigate]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      if (isLogin) {
+        const { error } = await signIn(email, password);
+        
+        if (error) {
+          toast({
+            title: "خطأ في تسجيل الدخول",
+            description: error.message === "Invalid login credentials" 
+              ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
+              : error.message,
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "تم تسجيل الدخول بنجاح",
+            description: "مرحباً بك في نظام نخبة الطب",
+          });
+          navigate("/patient/dashboard");
+        }
+      } else {
+        if (!name.trim()) {
+          toast({
+            title: "خطأ",
+            description: "يرجى إدخال الاسم الكامل",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        const { error } = await signUp(email, password, name, phone);
+        
+        if (error) {
+          if (error.message.includes("already registered")) {
+            toast({
+              title: "البريد مستخدم مسبقاً",
+              description: "هذا البريد الإلكتروني مسجل مسبقاً. يرجى تسجيل الدخول أو استخدام بريد آخر.",
+              variant: "destructive",
+            });
+          } else {
+            toast({
+              title: "خطأ في إنشاء الحساب",
+              description: error.message,
+              variant: "destructive",
+            });
+          }
+        } else {
+          toast({
+            title: "تم إنشاء الحساب بنجاح",
+            description: "تحقق من بريدك الإلكتروني لتأكيد الحساب",
+          });
+          setIsLogin(true);
+        }
+      }
+    } catch (error) {
       toast({
-        title: "تم إنشاء الحساب بنجاح",
-        description: "يمكنك الآن تسجيل الدخول والبحث عن المراكز الطبية",
+        title: "حدث خطأ",
+        description: "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.",
+        variant: "destructive",
       });
-      setIsLogin(true);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -92,7 +151,19 @@ const PatientLogin = () => {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="05xxxxxxxx"
-                    required={!isLogin}
+                    className="text-right"
+                  />
+                </div>
+              )}
+
+              {!isLogin && (
+                <div className="space-y-2">
+                  <Label htmlFor="birthDate">تاريخ الميلاد (اختياري)</Label>
+                  <Input
+                    id="birthDate"
+                    type="date"
+                    value={birthDate}
+                    onChange={(e) => setBirthDate(e.target.value)}
                     className="text-right"
                   />
                 </div>
@@ -134,8 +205,12 @@ const PatientLogin = () => {
                 type="submit"
                 className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-medium"
                 size="lg"
+                disabled={isSubmitting || loading}
               >
-                {isLogin ? "تسجيل الدخول" : "إنشاء الحساب"}
+                {isSubmitting 
+                  ? (isLogin ? "جاري تسجيل الدخول..." : "جاري إنشاء الحساب...") 
+                  : (isLogin ? "تسجيل الدخول" : "إنشاء الحساب")
+                }
               </Button>
             </form>
 

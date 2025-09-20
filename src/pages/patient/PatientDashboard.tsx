@@ -1,10 +1,13 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, MapPin, Star, Clock, Users, Building2, ArrowLeft } from "lucide-react";
+import { Search, MapPin, Star, Clock, Users, Building2, ArrowLeft, LogOut, Plus } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { useProfile } from "@/hooks/useProfile";
+import { useToast } from "@/hooks/use-toast";
 
 // Mock data for medical centers
 const medicalCenters = [
@@ -48,11 +51,46 @@ const medicalCenters = [
 
 const PatientDashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const { user, signOut, loading: authLoading } = useAuth();
+  const { profile, familyMembers, loading: profileLoading } = useProfile();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  // Redirect if not logged in
+  useEffect(() => {
+    if (!user && !authLoading) {
+      navigate("/patient/login");
+    }
+  }, [user, authLoading, navigate]);
+
+  const handleSignOut = async () => {
+    const { error } = await signOut();
+    if (error) {
+      toast({
+        title: "خطأ في تسجيل الخروج",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      navigate("/patient/login");
+    }
+  };
   
   const filteredCenters = medicalCenters.filter(center =>
     center.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     center.specialty.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  if (authLoading || profileLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">جاري التحميل...</p>
+        </div>
+      </div>
+    );
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -74,12 +112,20 @@ const PatientDashboard = () => {
         <div className="container mx-auto px-6 py-6">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">أهلاً بك، أحمد</h1>
+              <h1 className="text-2xl font-bold text-foreground">
+                أهلاً بك، {profile?.full_name || "عزيزي المستخدم"}
+              </h1>
               <p className="text-muted-foreground">ابحث عن المركز الطبي المناسب لك</p>
             </div>
-            <Link to="/" className="text-primary hover:text-primary/80 transition-colors">
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
+            <div className="flex items-center gap-3">
+              <Button variant="outline" size="sm" className="gap-2" onClick={handleSignOut}>
+                <LogOut className="h-4 w-4" />
+                تسجيل الخروج  
+              </Button>
+              <Link to="/" className="text-primary hover:text-primary/80 transition-colors">
+                <ArrowLeft className="h-5 w-5" />
+              </Link>
+            </div>
           </div>
 
           {/* Search Bar */}
@@ -98,6 +144,35 @@ const PatientDashboard = () => {
 
       {/* Medical Centers List */}
       <div className="container mx-auto px-6 py-8">
+        {/* Family Members Section */}
+        {familyMembers.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                أفراد العائلة
+              </CardTitle>
+              <CardDescription>
+                يمكنك الحجز لأي من أفراد عائلتك
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {familyMembers.map((member) => (
+                  <Badge key={member.id} variant="secondary" className="gap-1">
+                    <Users className="h-3 w-3" />
+                    {member.full_name} {member.relationship && `(${member.relationship})`}
+                  </Badge>
+                ))}
+                <Button variant="outline" size="sm" className="gap-1">
+                  <Plus className="h-3 w-3" />
+                  إضافة فرد جديد
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="mb-6">
           <h2 className="text-xl font-semibold mb-2">المراكز الطبية المتاحة</h2>
           <p className="text-muted-foreground">اختر المركز المناسب واحجز دورك</p>
