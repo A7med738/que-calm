@@ -6,11 +6,11 @@ import { ArrowLeft, Users, Clock, User, SkipForward, CheckCircle, Settings, Stet
 
 // Mock queue data
 const queueData = [
-  { id: 1, number: 18, name: "أحمد محمد العلي", service: "كشف وتشخيص", time: "2:30 م", status: "current" },
-  { id: 2, number: 19, name: "فاطمة أحمد السالم", service: "تنظيف الأسنان", time: "2:35 م", status: "waiting" },
-  { id: 3, number: 20, name: "محمد عبدالله الخالد", service: "حشو الأسنان", time: "2:40 م", status: "waiting" },
-  { id: 4, number: 21, name: "نورا سعد المطيري", service: "كشف وتشخيص", time: "2:45 م", status: "waiting" },
-  { id: 5, number: 22, name: "عبدالرحمن علي الغامدي", service: "استشارة تقويم", time: "2:50 م", status: "waiting" }
+  { id: 1, number: 18, name: "أحمد محمد علي", service: "كشف وتشخيص", time: "2:30 م", status: "current" },
+  { id: 2, number: 19, name: "فاطمة أحمد سالم", service: "تنظيف الأسنان", time: "2:35 م", status: "waiting" },
+  { id: 3, number: 20, name: "محمد عبدالله خالد", service: "حشو الأسنان", time: "2:40 م", status: "waiting" },
+  { id: 4, number: 21, name: "نورا سعد محمود", service: "كشف وتشخيص", time: "2:45 م", status: "waiting" },
+  { id: 5, number: 22, name: "عبدالرحمن علي حسن", service: "استشارة تقويم", time: "2:50 م", status: "waiting" }
 ];
 
 const ClinicDashboard = () => {
@@ -43,7 +43,6 @@ const ClinicDashboard = () => {
   const clinicInfo = {
     name: "عيادة الدكتور محمد أحمد",
     todayPatients: 28,
-    avgWaitTime: "15 دقيقة",
     currentStatus: "مفتوح"
   };
 
@@ -57,14 +56,13 @@ const ClinicDashboard = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="bg-card border-b">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">{clinicInfo.name}</h1>
-              <div className="flex items-center gap-4 mt-1">
-                <span className="text-sm text-muted-foreground">اليوم: {clinicInfo.todayPatients} مريض</span>
-                <span className="text-sm text-muted-foreground">متوسط الانتظار: {clinicInfo.avgWaitTime}</span>
-                <Badge className="bg-accent text-accent-foreground">{clinicInfo.currentStatus}</Badge>
+        <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex-1">
+              <h1 className="text-lg sm:text-2xl font-bold text-foreground">{clinicInfo.name}</h1>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 mt-1">
+                <span className="text-xs sm:text-sm text-muted-foreground">اليوم: {clinicInfo.todayPatients} مريض</span>
+                <Badge className="bg-accent text-accent-foreground text-xs">{clinicInfo.currentStatus}</Badge>
               </div>
             </div>
             <Button variant="ghost" size="sm">
@@ -74,25 +72,25 @@ const ClinicDashboard = () => {
         </div>
       </div>
 
-      <div className="flex">
+      <div className="flex flex-col lg:flex-row">
         {/* Sidebar */}
-        <div className="w-64 bg-card border-l min-h-screen">
-          <div className="p-4">
-            <nav className="space-y-2">
+        <div className="w-full lg:w-64 bg-card border-b lg:border-b-0 lg:border-l min-h-auto lg:min-h-screen">
+          <div className="p-3 sm:p-4">
+            <nav className="flex lg:flex-col gap-2 lg:space-y-2 overflow-x-auto lg:overflow-x-visible">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setSelectedTab(tab.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-right ${
+                    className={`flex items-center gap-2 lg:gap-3 px-3 lg:px-4 py-2 lg:py-3 rounded-lg transition-colors text-right whitespace-nowrap lg:w-full ${
                       selectedTab === tab.id
                         ? "bg-primary text-primary-foreground"
                         : "text-muted-foreground hover:bg-muted"
                     }`}
                   >
-                    <Icon className="h-5 w-5" />
-                    <span>{tab.label}</span>
+                    <Icon className="h-4 w-4 lg:h-5 lg:w-5" />
+                    <span className="text-sm lg:text-base">{tab.label}</span>
                   </button>
                 );
               })}
@@ -101,53 +99,55 @@ const ClinicDashboard = () => {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 p-6">
+        <div className="flex-1 p-4 sm:p-6">
           {selectedTab === "queue" && (
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               {/* Current Patient Card */}
               {currentPatient && (
                 <Card className="border-primary/20 bg-gradient-to-l from-primary/5 to-transparent">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-xl">
-                      <User className="h-6 w-6 text-primary" />
+                  <CardHeader className="pb-3 sm:pb-6">
+                    <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                      <User className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
                       المريض التالي
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="grid md:grid-cols-2 gap-6">
-                      <div className="space-y-4">
+                  <CardContent className="space-y-4 sm:space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                      <div className="space-y-3 sm:space-y-4">
                         <div>
-                          <h3 className="text-3xl font-bold text-foreground mb-2">
+                          <h3 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
                             رقم {currentPatient.number}
                           </h3>
-                          <p className="text-xl font-semibold text-card-foreground">
+                          <p className="text-lg sm:text-xl font-semibold text-card-foreground">
                             {currentPatient.name}
                           </p>
-                          <p className="text-primary font-medium">{currentPatient.service}</p>
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <Clock className="h-4 w-4" />
+                          <p className="text-primary font-medium text-sm sm:text-base">{currentPatient.service}</p>
+                          <div className="flex items-center gap-2 text-muted-foreground text-sm sm:text-base">
+                            <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
                             <span>وقت الحجز: {currentPatient.time}</span>
                           </div>
                         </div>
                       </div>
                       
-                      <div className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-2 sm:gap-3">
                         <Button 
                           onClick={handleNextPatient}
-                          className="bg-accent hover:bg-accent/90 text-accent-foreground flex items-center gap-2"
+                          className="bg-accent hover:bg-accent/90 text-accent-foreground flex items-center gap-2 text-sm sm:text-base"
                           size="lg"
                         >
-                          <CheckCircle className="h-5 w-5" />
-                          التالي - انتهى الفحص
+                          <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" />
+                          <span className="hidden sm:inline">التالي - انتهى الفحص</span>
+                          <span className="sm:hidden">التالي</span>
                         </Button>
                         <Button 
                           onClick={handleSkipPatient}
                           variant="outline"
-                          className="border-orange-300 text-orange-600 hover:bg-orange-50 flex items-center gap-2"
+                          className="border-orange-300 text-orange-600 hover:bg-orange-50 flex items-center gap-2 text-sm sm:text-base"
                           size="lg"
                         >
-                          <SkipForward className="h-5 w-5" />
-                          تأجيل - لم يحضر
+                          <SkipForward className="h-4 w-4 sm:h-5 sm:w-5" />
+                          <span className="hidden sm:inline">تأجيل - لم يحضر</span>
+                          <span className="sm:hidden">تأجيل</span>
                         </Button>
                       </div>
                     </div>
@@ -156,51 +156,44 @@ const ClinicDashboard = () => {
               )}
 
               {/* Queue Overview */}
-              <div className="grid md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <Card>
-                  <CardContent className="p-6 text-center">
-                    <Users className="h-8 w-8 text-primary mx-auto mb-2" />
-                    <div className="text-2xl font-bold text-foreground">{totalWaiting}</div>
-                    <p className="text-muted-foreground">في الانتظار</p>
+                  <CardContent className="p-4 sm:p-6 text-center">
+                    <Users className="h-6 w-6 sm:h-8 sm:w-8 text-primary mx-auto mb-2" />
+                    <div className="text-xl sm:text-2xl font-bold text-foreground">{totalWaiting}</div>
+                    <p className="text-muted-foreground text-sm sm:text-base">في الانتظار</p>
                   </CardContent>
                 </Card>
                 <Card>
-                  <CardContent className="p-6 text-center">
-                    <Clock className="h-8 w-8 text-accent mx-auto mb-2" />
-                    <div className="text-2xl font-bold text-foreground">15</div>
-                    <p className="text-muted-foreground">دقيقة متوسط انتظار</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-6 text-center">
-                    <CheckCircle className="h-8 w-8 text-accent mx-auto mb-2" />
-                    <div className="text-2xl font-bold text-foreground">23</div>
-                    <p className="text-muted-foreground">تم فحصهم اليوم</p>
+                  <CardContent className="p-4 sm:p-6 text-center">
+                    <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-accent mx-auto mb-2" />
+                    <div className="text-xl sm:text-2xl font-bold text-foreground">23</div>
+                    <p className="text-muted-foreground text-sm sm:text-base">تم فحصهم اليوم</p>
                   </CardContent>
                 </Card>
               </div>
 
               {/* Waiting List */}
               <Card>
-                <CardHeader>
-                  <CardTitle>قائمة الانتظار</CardTitle>
+                <CardHeader className="pb-3 sm:pb-6">
+                  <CardTitle className="text-lg sm:text-xl">قائمة الانتظار</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
+                  <div className="space-y-3 sm:space-y-4">
                     {waitingPatients.map((patient, index) => (
-                      <div key={patient.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                            <span className="font-bold text-primary">{patient.number}</span>
+                      <div key={patient.id} className="flex items-center justify-between p-3 sm:p-4 bg-muted/30 rounded-lg">
+                        <div className="flex items-center gap-3 sm:gap-4">
+                          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                            <span className="font-bold text-primary text-sm sm:text-base">{patient.number}</span>
                           </div>
                           <div>
-                            <p className="font-semibold text-card-foreground">{patient.name}</p>
-                            <p className="text-sm text-muted-foreground">{patient.service}</p>
+                            <p className="font-semibold text-card-foreground text-sm sm:text-base">{patient.name}</p>
+                            <p className="text-xs sm:text-sm text-muted-foreground">{patient.service}</p>
                           </div>
                         </div>
                         <div className="text-left">
-                          <p className="text-sm text-muted-foreground">المرتبة {index + 1}</p>
-                          <p className="text-sm text-muted-foreground">{patient.time}</p>
+                          <p className="text-xs sm:text-sm text-muted-foreground">المرتبة {index + 1}</p>
+                          <p className="text-xs sm:text-sm text-muted-foreground">{patient.time}</p>
                         </div>
                       </div>
                     ))}
@@ -211,13 +204,13 @@ const ClinicDashboard = () => {
           )}
 
           {selectedTab === "services" && (
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               <Card>
-                <CardHeader>
-                  <CardTitle>إدارة الخدمات</CardTitle>
+                <CardHeader className="pb-3 sm:pb-6">
+                  <CardTitle className="text-lg sm:text-xl">إدارة الخدمات</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-muted-foreground text-center py-8">
+                  <p className="text-muted-foreground text-center py-6 sm:py-8 text-sm sm:text-base">
                     قريباً - صفحة إدارة الخدمات
                   </p>
                 </CardContent>
@@ -226,13 +219,13 @@ const ClinicDashboard = () => {
           )}
 
           {selectedTab === "settings" && (
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               <Card>
-                <CardHeader>
-                  <CardTitle>إعدادات المركز</CardTitle>
+                <CardHeader className="pb-3 sm:pb-6">
+                  <CardTitle className="text-lg sm:text-xl">إعدادات المركز</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-muted-foreground text-center py-8">
+                  <p className="text-muted-foreground text-center py-6 sm:py-8 text-sm sm:text-base">
                     قريباً - صفحة الإعدادات
                   </p>
                 </CardContent>

@@ -104,7 +104,6 @@ const QueueTracking = () => {
                       <Users className="h-6 w-6" />
                       <span>أمامك {waitingCount} منتظرين</span>
                     </div>
-                    <p className="text-muted-foreground">الانتظار المتوقع: {Math.max(5, waitingCount * 5)} دقائق</p>
                   </div>
 
                   <div className="space-y-3">

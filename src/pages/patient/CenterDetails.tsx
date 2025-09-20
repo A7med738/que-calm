@@ -3,134 +3,216 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, MapPin, Clock, Star, User, Stethoscope, Calendar } from "lucide-react";
+import { ArrowRight, MapPin, Star, User, Stethoscope, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { useMedicalCenter } from "@/hooks/useMedicalCenter";
+import { supabase } from "@/integrations/supabase/client";
 
 const CenterDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  
-  // Mock center data
-  const center = {
-    id: Number(id),
-    name: "عيادة الدكتور محمد أحمد",
-    specialty: "طب الأسنان",
-    image: "/placeholder.svg",
-    rating: 4.8,
-    address: "شارع الملك فهد، الرياض",
-    phone: "011-234-5678",
-    hours: "السبت - الخميس: 9:00 ص - 9:00 م",
-    description: "عيادة متخصصة في طب الأسنان مع أحدث التقنيات والأجهزة الطبية. نقدم خدمات شاملة من التنظيف والحشوات إلى التقويم والزراعة.",
-    services: [
-      { id: 1, name: "كشف وتشخيص", price: 150, waitingCount: 3, estimatedWait: 15 },
-      { id: 2, name: "تنظيف الأسنان", price: 200, waitingCount: 2, estimatedWait: 10 },
-      { id: 3, name: "حشو الأسنان", price: 300, waitingCount: 5, estimatedWait: 25 },
-      { id: 4, name: "استشارة تقويم", price: 100, waitingCount: 1, estimatedWait: 5 }
-    ],
-    doctors: [
-      { name: "د. محمد أحمد", specialty: "استشاري طب الأسنان", experience: "15 سنة خبرة" },
-      { name: "د. فاطمة السالم", specialty: "أخصائية تقويم الأسنان", experience: "8 سنوات خبرة" }
-    ]
+  const { user } = useAuth();
+  const { center, services, loading: centerLoading, error: centerError } = useMedicalCenter(id || "");
+
+  const handleBookService = async (serviceId: string, serviceName: string) => {
+    if (!user) {
+      toast({
+        title: "خطأ في الحجز",
+        description: "يجب تسجيل الدخول أولاً",
+        variant: "destructive",
+      });
+      navigate("/patient/login");
+      return;
+    }
+
+    try {
+      // Get the service details
+      const service = services.find(s => s.id === serviceId);
+      if (!service || !center) {
+        throw new Error("الخدمة أو المركز غير موجود");
+      }
+
+      // Get today's date
+      const today = new Date();
+      const bookingDate = today.toISOString().split('T')[0];
+      const bookingTime = today.toTimeString().split(' ')[0].substring(0, 5);
+
+      // Get next queue number for today
+      const { data: nextQueueNumber } = await supabase
+        .rpc('get_next_queue_number', {
+          p_medical_center_id: center.id,
+          p_booking_date: bookingDate
+        });
+
+      // Generate QR code
+      const { data: qrCode } = await supabase
+        .rpc('generate_booking_qr_code');
+
+      // Create booking
+      const { data: booking, error } = await supabase
+        .from('bookings')
+        .insert({
+          patient_id: user.id,
+          medical_center_id: center.id,
+          service_id: serviceId,
+          doctor_id: null, // We'll set this to null for now since we don't have doctor IDs in mock data
+          booking_date: bookingDate,
+          booking_time: bookingTime,
+          queue_number: nextQueueNumber || 1,
+          qr_code: qrCode,
+          status: 'pending'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      // Create queue tracking entry
+      await supabase
+        .from('queue_tracking')
+        .insert({
+          booking_id: booking.id,
+          current_number: 0,
+          waiting_count: 0,
+          status: 'waiting'
+        });
+
+      toast({
+        title: "تم حجز الدور بنجاح",
+        description: `تم حجز دورك لخدمة ${serviceName} - رقم الدور: ${nextQueueNumber || 1}`,
+      });
+      
+      navigate(`/patient/queue/${booking.id}`);
+    } catch (error) {
+      console.error('Error creating booking:', error);
+      toast({
+        title: "خطأ في الحجز",
+        description: "حدث خطأ أثناء حجز الدور، حاول مرة أخرى",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleBookService = (serviceId: number, serviceName: string) => {
-    // Simulate booking
-    const bookingId = Math.random().toString(36).substr(2, 9);
-    
-    toast({
-      title: "تم حجز الدور بنجاح",
-      description: `تم حجز دورك لخدمة ${serviceName}`,
-    });
-    
-    navigate(`/patient/queue/${bookingId}`);
-  };
+  // Show loading state
+  if (centerLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">جاري تحميل بيانات المركز...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (centerError || !center) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-foreground mb-4">خطأ في تحميل المركز</h1>
+          <p className="text-muted-foreground mb-6">
+            {centerError || "المركز الطبي غير موجود"}
+          </p>
+          <Button onClick={() => navigate("/patient/dashboard")}>
+            العودة للرئيسية
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="bg-gradient-to-l from-primary/5 to-accent/5 border-b">
-        <div className="container mx-auto px-6 py-6">
-          <div className="flex items-center gap-4 mb-6">
+        <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
+          <div className="flex items-center gap-4 mb-4 sm:mb-6">
             <Link
               to="/patient/dashboard"
-              className="text-primary hover:text-primary/80 transition-colors flex items-center gap-2"
+              className="text-primary hover:text-primary/80 transition-colors flex items-center gap-2 text-sm sm:text-base"
             >
-              <ArrowRight className="h-5 w-5" />
+              <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5" />
               <span>العودة للقائمة</span>
             </Link>
           </div>
 
           {/* Center Hero */}
-          <div className="flex gap-6 items-start">
-            <div className="w-32 h-32 bg-muted rounded-2xl flex items-center justify-center flex-shrink-0">
-              <Stethoscope className="h-16 w-16 text-muted-foreground" />
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-start">
+            <div className="w-24 h-24 sm:w-32 sm:h-32 bg-muted rounded-2xl flex items-center justify-center flex-shrink-0 mx-auto sm:mx-0">
+              <Stethoscope className="h-12 w-12 sm:h-16 sm:w-16 text-muted-foreground" />
             </div>
             
-            <div className="flex-1">
-              <h1 className="text-3xl font-bold text-foreground mb-2">{center.name}</h1>
-              <p className="text-xl text-primary font-medium mb-3">{center.specialty}</p>
+            <div className="flex-1 text-center sm:text-right">
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">{center.name}</h1>
+              <p className="text-lg sm:text-xl text-primary font-medium mb-3">{center.specialty}</p>
               
-              <div className="flex items-center gap-6 text-muted-foreground mb-4">
+              <div className="flex flex-col sm:flex-row items-center sm:items-center gap-3 sm:gap-6 text-muted-foreground mb-4">
                 <div className="flex items-center gap-1">
-                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                  <span>{center.rating}</span>
+                  <Star className="h-3 w-3 sm:h-4 sm:w-4 fill-yellow-400 text-yellow-400" />
+                  <span className="text-sm sm:text-base">{center.rating}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <MapPin className="h-4 w-4" />
-                  <span>{center.address}</span>
+                  <MapPin className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="text-sm sm:text-base">{center.address}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
-                  <span>{center.hours}</span>
+                  <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="text-sm sm:text-base">{center.hours}</span>
                 </div>
               </div>
               
-              <p className="text-muted-foreground leading-relaxed">{center.description}</p>
+              <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">{center.description}</p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="container mx-auto px-6 py-8 space-y-8">
+      <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
         {/* Services Section */}
         <div>
-          <h2 className="text-2xl font-bold mb-6 text-foreground">الخدمات المتاحة</h2>
-          <div className="grid gap-6">
-            {center.services.map((service) => (
+          <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-foreground">الخدمات المتاحة</h2>
+          <div className="grid gap-4 sm:gap-6">
+            {services.map((service) => (
               <Card key={service.id} className="hover:shadow-md transition-all duration-300">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between mb-4">
-                        <div>
-                          <h3 className="text-xl font-semibold text-card-foreground mb-2">
+                <CardContent className="p-4 sm:p-6">
+                  <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+                    <div className="flex-1 w-full">
+                      <div className="flex flex-col sm:flex-row items-start justify-between mb-4 gap-3">
+                        <div className="flex-1">
+                          <h3 className="text-lg sm:text-xl font-semibold text-card-foreground mb-2">
                             {service.name}
                           </h3>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span className="text-2xl font-bold text-primary">{service.price} ريال</span>
-                            <div className="flex items-center gap-1">
-                              <Calendar className="h-4 w-4" />
-                              <span>{service.waitingCount} منتظرين</span>
+                          {service.doctor_name && (
+                            <div className="flex items-center gap-2 mb-3">
+                              <User className="h-4 w-4 text-primary" />
+                              <span className="text-sm sm:text-base text-primary font-medium">{service.doctor_name}</span>
                             </div>
+                          )}
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
+                            <span className="text-xl sm:text-2xl font-bold text-primary">{service.price} جنيه</span>
                             <div className="flex items-center gap-1">
-                              <Clock className="h-4 w-4" />
-                              <span>الانتظار المتوقع: {service.estimatedWait} دقيقة</span>
+                              <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+                              <span>{service.waiting_count || 0} منتظرين</span>
                             </div>
                           </div>
                         </div>
                         
                         <Badge 
-                          variant={service.waitingCount <= 2 ? "default" : "secondary"}
-                          className={service.waitingCount <= 2 ? "bg-accent text-accent-foreground" : ""}
+                          variant={(service.waiting_count || 0) <= 2 ? "default" : "secondary"}
+                          className={(service.waiting_count || 0) <= 2 ? "bg-accent text-accent-foreground" : ""}
                         >
-                          {service.waitingCount <= 2 ? "متاح الآن" : "مزدحم"}
+                          {(service.waiting_count || 0) <= 2 ? "متاح الآن" : "مزدحم"}
                         </Badge>
                       </div>
                       
                       <Button
                         onClick={() => handleBookService(service.id, service.name)}
-                        className="bg-accent hover:bg-accent/90 text-accent-foreground"
+                        className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto text-sm sm:text-base"
                         size="lg"
                       >
                         احجز دورك الآن
@@ -143,28 +225,6 @@ const CenterDetails = () => {
           </div>
         </div>
 
-        {/* Doctors Section */}
-        <div>
-          <h2 className="text-2xl font-bold mb-6 text-foreground">الأطباء العاملون</h2>
-          <div className="grid md:grid-cols-2 gap-6">
-            {center.doctors.map((doctor, index) => (
-              <Card key={index}>
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
-                      <User className="h-8 w-8 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-card-foreground">{doctor.name}</h3>
-                      <p className="text-primary font-medium">{doctor.specialty}</p>
-                      <p className="text-sm text-muted-foreground">{doctor.experience}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );
