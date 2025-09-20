@@ -8,6 +8,7 @@ import { ArrowLeft, Users, Clock, User, SkipForward, CheckCircle, Settings, Stet
 import ServicesManagement from "@/components/clinic/ServicesManagement";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useClinicBookings } from "@/hooks/useClinicBookings";
+import { useDoctorQueues, DoctorQueue, DoctorQueuePatient } from "@/hooks/useDoctorQueues";
 import { supabase } from "@/integrations/supabase/client";
 
 // Helper function to calculate remaining turns
@@ -36,12 +37,15 @@ const ClinicDashboard = () => {
   const [loadingPatientDetails, setLoadingPatientDetails] = useState(false);
   const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
+  const [selectedDoctorQueue, setSelectedDoctorQueue] = useState<DoctorQueue | null>(null);
+  const [doctorQueuePatients, setDoctorQueuePatients] = useState<DoctorQueuePatient[]>([]);
+  const [loadingDoctorQueuePatients, setLoadingDoctorQueuePatients] = useState(false);
   const navigate = useNavigate();
   
   // Get notifications for the current user (medical center owner)
   const { notifications, getUnreadCount, markAsRead, markAllAsRead } = useNotifications();
   
-  // Get real bookings for the medical center
+  // Get real bookings for the medical center (legacy - for backward compatibility)
   const { 
     bookings, 
     loading: bookingsLoading, 
@@ -54,6 +58,19 @@ const ClinicDashboard = () => {
     getCompletedCount,
     getPatientDetails
   } = useClinicBookings(clinicSession?.medical_center?.id || '');
+
+  // Get doctor queues for the medical center (new system)
+  const {
+    doctorQueues,
+    loading: doctorQueuesLoading,
+    isRealtimeConnected: doctorQueuesRealtimeConnected,
+    lastUpdateTime: doctorQueuesLastUpdateTime,
+    refetch: refetchDoctorQueues,
+    getDoctorQueuePatients,
+    callNextPatient,
+    skipPatient,
+    completePatient
+  } = useDoctorQueues(clinicSession?.medical_center?.id || '');
 
   // Fetch completed count when medical center ID is available (with debouncing)
   useEffect(() => {
@@ -68,15 +85,15 @@ const ClinicDashboard = () => {
 
   // Monitor realtime connection status
   useEffect(() => {
-    setIsRealtimeConnected(hookRealtimeConnected);
-  }, [hookRealtimeConnected]);
+    setIsRealtimeConnected(hookRealtimeConnected || doctorQueuesRealtimeConnected);
+  }, [hookRealtimeConnected, doctorQueuesRealtimeConnected]);
 
   // Update last update time from hook
   useEffect(() => {
-    if (hookLastUpdateTime) {
-      setLastUpdateTime(hookLastUpdateTime);
+    if (hookLastUpdateTime || doctorQueuesLastUpdateTime) {
+      setLastUpdateTime(hookLastUpdateTime || doctorQueuesLastUpdateTime);
     }
-  }, [hookLastUpdateTime]);
+  }, [hookLastUpdateTime, doctorQueuesLastUpdateTime]);
 
   useEffect(() => {
     // تحقق من وجود جلسة المركز
@@ -134,10 +151,60 @@ const ClinicDashboard = () => {
   const handleManualRefresh = async () => {
     try {
       await refetch();
+      await refetchDoctorQueues();
       await getCompletedCount().then(setCompletedCount);
       setLastUpdateTime(new Date());
     } catch (error) {
       console.error('Error refreshing data:', error);
+    }
+  };
+
+  const handleSelectDoctorQueue = async (doctorQueue: DoctorQueue) => {
+    setSelectedDoctorQueue(doctorQueue);
+    setLoadingDoctorQueuePatients(true);
+    try {
+      const patients = await getDoctorQueuePatients(doctorQueue.doctor_id);
+      setDoctorQueuePatients(patients);
+    } catch (error) {
+      console.error('Error fetching doctor queue patients:', error);
+    } finally {
+      setLoadingDoctorQueuePatients(false);
+    }
+  };
+
+  const handleCallNextPatient = async (doctorId: string) => {
+    try {
+      await callNextPatient(doctorId);
+      // Refresh the selected doctor queue
+      if (selectedDoctorQueue) {
+        await handleSelectDoctorQueue(selectedDoctorQueue);
+      }
+    } catch (error) {
+      console.error('Error calling next patient:', error);
+    }
+  };
+
+  const handleSkipPatientInQueue = async (bookingId: string) => {
+    try {
+      await skipPatient(bookingId);
+      // Refresh the selected doctor queue
+      if (selectedDoctorQueue) {
+        await handleSelectDoctorQueue(selectedDoctorQueue);
+      }
+    } catch (error) {
+      console.error('Error skipping patient:', error);
+    }
+  };
+
+  const handleCompletePatientInQueue = async (bookingId: string) => {
+    try {
+      await completePatient(bookingId);
+      // Refresh the selected doctor queue
+      if (selectedDoctorQueue) {
+        await handleSelectDoctorQueue(selectedDoctorQueue);
+      }
+    } catch (error) {
+      console.error('Error completing patient:', error);
     }
   };
 
@@ -282,185 +349,195 @@ const ClinicDashboard = () => {
         <div className="flex-1 p-4 sm:p-6">
           {selectedTab === "queue" && (
             <div className="space-y-4 sm:space-y-6">
-              {/* Current Patient Card */}
-              {currentBooking && (
-                <Card className="border-primary/20 bg-gradient-to-l from-primary/5 to-transparent">
-                  <CardHeader className="pb-3 sm:pb-6">
-                    <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-                      <User className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
-                      المريض التالي
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4 sm:space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                      <div className="space-y-3 sm:space-y-4">
+              {/* Doctor Queues Overview */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                {doctorQueues.map((doctorQueue) => (
+                  <Card 
+                    key={doctorQueue.doctor_id}
+                    className={`cursor-pointer transition-all hover:shadow-md ${
+                      selectedDoctorQueue?.doctor_id === doctorQueue.doctor_id 
+                        ? 'border-primary bg-primary/5' 
+                        : 'hover:border-primary/50'
+                    }`}
+                    onClick={() => handleSelectDoctorQueue(doctorQueue)}
+                  >
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <Stethoscope className="h-5 w-5 text-primary" />
+                        {doctorQueue.doctor_name}
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground">{doctorQueue.doctor_specialty}</p>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3 text-center">
                         <div>
-                          <h3 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
-                            رقم {currentBooking.queue_number}
-                          </h3>
-                          <p className="text-lg sm:text-xl font-semibold text-card-foreground">
-                            {currentBooking.patient_name}
-                          </p>
-                          <p className="text-primary font-medium text-sm sm:text-base">{currentBooking.service_name}</p>
-                              <div className="flex items-center gap-2 text-muted-foreground text-sm sm:text-base">
-                                <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
-                                <span>وقت الحجز: {currentBooking.booking_time}</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-blue-600 text-sm sm:text-base font-medium">
-                                <Users className="h-3 w-3 sm:h-4 sm:w-4" />
-                                <span>متبقي: {remainingTurns} دور</span>
-                              </div>
-                              {waitingBookings.length > 0 && (
-                                <div className="flex items-center gap-2 text-muted-foreground text-xs sm:text-sm">
-                                  <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
-                                  <span>آخر دور: {Math.max(...waitingBookings.map(b => b.queue_number))}</span>
-                                </div>
-                              )}
+                          <div className="text-xl font-bold text-primary">{doctorQueue.waiting_patients}</div>
+                          <p className="text-xs text-muted-foreground">في الانتظار</p>
+                        </div>
+                        <div>
+                          <div className="text-xl font-bold text-accent">{doctorQueue.completed_patients}</div>
+                          <p className="text-xs text-muted-foreground">تم فحصهم</p>
                         </div>
                       </div>
-                      
-                      <div className="flex flex-col gap-2 sm:gap-3">
-                        <Button 
-                          onClick={() => handleViewPatientDetails(currentBooking)}
-                          variant="outline"
-                          className="flex items-center gap-2 text-sm sm:text-base"
-                          size="lg"
-                        >
-                          <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
-                          <span className="hidden sm:inline">عرض تفاصيل المريض</span>
-                          <span className="sm:hidden">التفاصيل</span>
-                        </Button>
-                        <Button 
-                          onClick={handleNextPatient}
-                          className="bg-accent hover:bg-accent/90 text-accent-foreground flex items-center gap-2 text-sm sm:text-base"
-                          size="lg"
-                        >
-                          <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" />
-                          <span className="hidden sm:inline">التالي - انتهى الفحص</span>
-                          <span className="sm:hidden">التالي</span>
-                        </Button>
-                        <Button 
-                          onClick={handleSkipPatient}
-                          variant="outline"
-                          className="border-orange-300 text-orange-600 hover:bg-orange-50 flex items-center gap-2 text-sm sm:text-base"
-                          size="lg"
-                        >
-                          <SkipForward className="h-4 w-4 sm:h-5 sm:w-5" />
-                          <span className="hidden sm:inline">تأجيل - لم يحضر</span>
-                          <span className="sm:hidden">تأجيل</span>
-                        </Button>
+                      {doctorQueue.current_patient_queue_number > 0 && (
+                        <div className="text-center">
+                          <div className="text-sm font-medium text-blue-600">
+                            الدور الحالي: {doctorQueue.current_patient_queue_number}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Selected Doctor Queue Details */}
+              {selectedDoctorQueue && (
+                <Card className="border-primary/20">
+                  <CardHeader className="pb-3 sm:pb-6">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                        <Stethoscope className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+                        طابور د. {selectedDoctorQueue.doctor_name}
+                      </CardTitle>
+                      <div className="flex items-center gap-2">
+                        {isRealtimeConnected ? (
+                          <Wifi className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <WifiOff className="h-4 w-4 text-red-500" />
+                        )}
+                        <span className="text-xs text-muted-foreground">
+                          {isRealtimeConnected ? 'تحديث مباشر' : 'غير متصل'}
+                        </span>
                       </div>
                     </div>
+                    <p className="text-sm text-muted-foreground">{selectedDoctorQueue.doctor_specialty}</p>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingDoctorQueuePatients ? (
+                      <div className="text-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                        <p className="text-sm text-muted-foreground mt-2">جاري تحميل الطابور...</p>
+                      </div>
+                    ) : doctorQueuePatients.length === 0 ? (
+                      <div className="text-center py-8">
+                        <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                        <p className="text-muted-foreground">لا يوجد مرضى في الطابور</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {/* Current Patient */}
+                        {doctorQueuePatients.find(p => p.status === 'in_progress') && (
+                          <div className="p-4 bg-primary/10 border border-primary/20 rounded-lg">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h3 className="font-semibold text-primary">دورك الآن</h3>
+                                <p className="text-sm text-muted-foreground">
+                                  {doctorQueuePatients.find(p => p.status === 'in_progress')?.patient_name}
+                                </p>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleCompletePatientInQueue(
+                                    doctorQueuePatients.find(p => p.status === 'in_progress')?.booking_id || ''
+                                  )}
+                                  className="bg-accent hover:bg-accent/90"
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-1" />
+                                  انتهى
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleSkipPatientInQueue(
+                                    doctorQueuePatients.find(p => p.status === 'in_progress')?.booking_id || ''
+                                  )}
+                                  className="border-orange-300 text-orange-600 hover:bg-orange-50"
+                                >
+                                  <SkipForward className="h-4 w-4 mr-1" />
+                                  تأجيل
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Waiting Patients */}
+                        <div className="space-y-2">
+                          {doctorQueuePatients
+                            .filter(p => p.status === 'pending' || p.status === 'confirmed')
+                            .sort((a, b) => a.queue_number - b.queue_number)
+                            .map((patient, index) => (
+                            <div key={patient.booking_id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                                  <span className="font-bold text-primary text-sm">{patient.queue_number}</span>
+                                </div>
+                                <div>
+                                  <p className="font-semibold text-sm">{patient.patient_name}</p>
+                                  <p className="text-xs text-muted-foreground">{patient.service_name}</p>
+                                  <p className="text-xs text-muted-foreground">{patient.booking_time}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {index === 0 && !doctorQueuePatients.find(p => p.status === 'in_progress') && (
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleCallNextPatient(selectedDoctorQueue.doctor_id)}
+                                    className="bg-primary hover:bg-primary/90"
+                                  >
+                                    <User className="h-4 w-4 mr-1" />
+                                    استدعاء
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleViewPatientDetails(patient)}
+                                >
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  تفاصيل
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
 
-                  {/* Queue Overview */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-                    <Card>
-                      <CardContent className="p-4 sm:p-6 text-center">
-                        <Users className="h-6 w-6 sm:h-8 sm:w-8 text-primary mx-auto mb-2" />
-                        <div className="text-xl sm:text-2xl font-bold text-foreground">{totalWaiting}</div>
-                        <p className="text-muted-foreground text-sm sm:text-base">في الانتظار</p>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardContent className="p-4 sm:p-6 text-center">
-                        <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500 mx-auto mb-2" />
-                        <div className="text-xl sm:text-2xl font-bold text-foreground">{remainingTurns}</div>
-                        <p className="text-muted-foreground text-sm sm:text-base">أدوار متبقية</p>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardContent className="p-4 sm:p-6 text-center">
-                        <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-accent mx-auto mb-2" />
-                        <div className="text-xl sm:text-2xl font-bold text-foreground">{completedCount}</div>
-                        <p className="text-muted-foreground text-sm sm:text-base">تم فحصهم اليوم</p>
-                      </CardContent>
-                    </Card>
-                  </div>
+              {/* Overall Statistics */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+                <Card>
+                  <CardContent className="p-4 sm:p-6 text-center">
+                    <Users className="h-6 w-6 sm:h-8 sm:w-8 text-primary mx-auto mb-2" />
+                    <div className="text-xl sm:text-2xl font-bold text-foreground">
+                      {doctorQueues.reduce((sum, queue) => sum + queue.waiting_patients, 0)}
+                    </div>
+                    <p className="text-muted-foreground text-sm sm:text-base">إجمالي المنتظرين</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 sm:p-6 text-center">
+                    <Stethoscope className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500 mx-auto mb-2" />
+                    <div className="text-xl sm:text-2xl font-bold text-foreground">{doctorQueues.length}</div>
+                    <p className="text-muted-foreground text-sm sm:text-base">الأطباء النشطين</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 sm:p-6 text-center">
+                    <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-accent mx-auto mb-2" />
+                    <div className="text-xl sm:text-2xl font-bold text-foreground">
+                      {doctorQueues.reduce((sum, queue) => sum + queue.completed_patients, 0)}
+                    </div>
+                    <p className="text-muted-foreground text-sm sm:text-base">تم فحصهم اليوم</p>
+                  </CardContent>
+                </Card>
+              </div>
 
-                  {/* Waiting List */}
-                  <Card>
-                    <CardHeader className="pb-3 sm:pb-6">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg sm:text-xl">قائمة الانتظار</CardTitle>
-                        <div className="flex items-center gap-2">
-                          {isRealtimeConnected ? (
-                            <>
-                              <Wifi className="h-4 w-4 text-green-500" />
-                              <span className="text-xs text-green-600">تحديث مباشر</span>
-                            </>
-                          ) : (
-                            <>
-                              <WifiOff className="h-4 w-4 text-red-500" />
-                              <span className="text-xs text-red-600">غير متصل</span>
-                            </>
-                          )}
-                          {lastUpdateTime && (
-                            <span className="text-xs text-muted-foreground">
-                              آخر تحديث: {lastUpdateTime.toLocaleTimeString('ar-SA')}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </CardHeader>
-                <CardContent>
-                  {bookingsLoading ? (
-                    <div className="text-center py-6">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                      <p className="text-muted-foreground">جاري تحميل الحجوزات...</p>
-                    </div>
-                  ) : waitingBookings.length === 0 ? (
-                    <div className="text-center py-6">
-                      <p className="text-muted-foreground">لا توجد حجوزات في الانتظار</p>
-                      {isRealtimeConnected ? (
-                        <p className="text-xs text-green-600 mt-2">
-                          الحجوزات الجديدة ستظهر تلقائياً
-                        </p>
-                      ) : (
-                        <p className="text-xs text-muted-foreground mt-2">
-                          اضغط زر "تحديث" في الأعلى لتحميل الحجوزات الجديدة
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="space-y-3 sm:space-y-4">
-                      {waitingBookings.map((booking, index) => (
-                        <div key={booking.id} className="flex items-center justify-between p-3 sm:p-4 bg-muted/30 rounded-lg">
-                          <div className="flex items-center gap-3 sm:gap-4">
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                              <span className="font-bold text-primary text-sm sm:text-base">{booking.queue_number}</span>
-                            </div>
-                            <div>
-                              <p className="font-semibold text-card-foreground text-sm sm:text-base">{booking.patient_name}</p>
-                              <p className="text-xs sm:text-sm text-muted-foreground">{booking.service_name}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="text-left">
-                              <p className="text-xs sm:text-sm text-muted-foreground">المرتبة {index + 1}</p>
-                              <p className="text-xs sm:text-sm text-muted-foreground">{booking.booking_time}</p>
-                              <p className="text-xs text-blue-600 font-medium">
-                                متبقي: {calculateTurnsRemaining(booking.queue_number, currentBooking?.queue_number || 0)} دور
-                              </p>
-                            </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleViewPatientDetails(booking)}
-                              className="text-xs"
-                            >
-                              <Eye className="h-3 w-3 mr-1" />
-                              تفاصيل
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
             </div>
           )}
 
