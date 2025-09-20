@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Search, MapPin, Star, Users, Building2, Plus, User, Calendar, Heart, Clock, X, CheckCircle, Trash2, Shield } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
@@ -27,13 +36,20 @@ const PatientDashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("dashboard");
   const [favoriteCenters, setFavoriteCenters] = useState<number[]>([]);
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    full_name: "",
+    phone: "",
+    birth_date: ""
+  });
   const { user, signOut, loading: authLoading } = useAuth();
-  const { profile, familyMembers, loading: profileLoading } = useProfile();
+  const { profile, familyMembers, loading: profileLoading, updateProfile } = useProfile();
   const { bookings, loading: bookingsLoading, cancelBooking, deleteBooking } = useBookings();
   const { centers, loading: centersLoading, search } = useMedicalCenters();
   const { isAdmin, isClinicAdmin } = useUserRole();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
 
   // Redirect if not logged in
   useEffect(() => {
@@ -41,6 +57,25 @@ const PatientDashboard = () => {
       navigate("/patient/login");
     }
   }, [user, authLoading, navigate]);
+
+  // Handle tab from URL query parameter
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam && ['dashboard', 'favorites', 'bookings', 'profile'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
+
+  // Load profile data into edit form when profile is loaded
+  useEffect(() => {
+    if (profile) {
+      setEditFormData({
+        full_name: profile.full_name || "",
+        phone: profile.phone || "",
+        birth_date: profile.birth_date || ""
+      });
+    }
+  }, [profile]);
 
   const handleSignOut = async () => {
     const { error } = await signOut();
@@ -103,6 +138,34 @@ const PatientDashboard = () => {
       toast({
         title: "خطأ في حذف الحجز",
         description: "حدث خطأ أثناء حذف الحجز، حاول مرة أخرى",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditProfile = () => {
+    setIsEditProfileOpen(true);
+  };
+
+  const handleEditFormChange = (field: string, value: string) => {
+    setEditFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      await updateProfile(editFormData);
+      toast({
+        title: "تم تحديث الملف الشخصي",
+        description: "تم حفظ التغييرات بنجاح",
+      });
+      setIsEditProfileOpen(false);
+    } catch (error) {
+      toast({
+        title: "خطأ في تحديث الملف الشخصي",
+        description: "حدث خطأ أثناء حفظ التغييرات، حاول مرة أخرى",
         variant: "destructive",
       });
     }
@@ -365,7 +428,11 @@ const PatientDashboard = () => {
                     <p className="text-foreground font-medium">{profile?.birth_date || "غير محدد"}</p>
                   </div>
                 </div>
-                <Button variant="outline" className="w-full sm:w-auto">
+                <Button 
+                  variant="outline" 
+                  className="w-full sm:w-auto"
+                  onClick={handleEditProfile}
+                >
                   تعديل المعلومات
                 </Button>
               </CardContent>
@@ -787,6 +854,63 @@ const PatientDashboard = () => {
 
       {/* Add bottom padding to prevent content from being hidden behind the bottom nav */}
       <div className="h-20"></div>
+
+      {/* Edit Profile Dialog */}
+      <Dialog open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>تعديل الملف الشخصي</DialogTitle>
+            <DialogDescription>
+              قم بتحديث معلوماتك الشخصية
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="full_name">الاسم الكامل</Label>
+              <Input
+                id="full_name"
+                value={editFormData.full_name}
+                onChange={(e) => handleEditFormChange('full_name', e.target.value)}
+                placeholder="أدخل اسمك الكامل"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="phone">رقم الهاتف</Label>
+              <Input
+                id="phone"
+                value={editFormData.phone}
+                onChange={(e) => handleEditFormChange('phone', e.target.value)}
+                placeholder="01xxxxxxxxx"
+                type="tel"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="birth_date">تاريخ الميلاد</Label>
+              <Input
+                id="birth_date"
+                value={editFormData.birth_date}
+                onChange={(e) => handleEditFormChange('birth_date', e.target.value)}
+                type="date"
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setIsEditProfileOpen(false)}
+            >
+              إلغاء
+            </Button>
+            <Button onClick={handleSaveProfile}>
+              حفظ التغييرات
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

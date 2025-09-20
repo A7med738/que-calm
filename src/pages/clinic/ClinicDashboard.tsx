@@ -3,8 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Users, Clock, User, SkipForward, CheckCircle, Settings, Stethoscope } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import { ArrowLeft, Users, Clock, User, SkipForward, CheckCircle, Settings, Stethoscope, Bell, Eye, Phone, Mail, Calendar } from "lucide-react";
 import ServicesManagement from "@/components/clinic/ServicesManagement";
+import { useNotifications } from "@/hooks/useNotifications";
+import { useClinicBookings } from "@/hooks/useClinicBookings";
 import { supabase } from "@/integrations/supabase/client";
 
 // Mock queue data
@@ -17,11 +20,34 @@ const queueData = [
 ];
 
 const ClinicDashboard = () => {
-  const [queue, setQueue] = useState(queueData);
-  const [currentPatient, setCurrentPatient] = useState(queue[0]);
   const [selectedTab, setSelectedTab] = useState("queue");
   const [clinicSession, setClinicSession] = useState<any>(null);
+  const [completedCount, setCompletedCount] = useState(0);
+  const [selectedPatient, setSelectedPatient] = useState<any>(null);
+  const [patientDetails, setPatientDetails] = useState<any>(null);
+  const [loadingPatientDetails, setLoadingPatientDetails] = useState(false);
   const navigate = useNavigate();
+  
+  // Get notifications for the current user (medical center owner)
+  const { notifications, getUnreadCount, markAsRead, markAllAsRead } = useNotifications();
+  
+  // Get real bookings for the medical center
+  const { 
+    bookings, 
+    loading: bookingsLoading, 
+    getCurrentBooking, 
+    getWaitingBookings, 
+    updateBookingStatus,
+    getCompletedCount,
+    getPatientDetails
+  } = useClinicBookings(clinicSession?.medical_center?.id || '');
+
+  // Fetch completed count when medical center ID is available
+  useEffect(() => {
+    if (clinicSession?.medical_center?.id) {
+      getCompletedCount().then(setCompletedCount);
+    }
+  }, [clinicSession?.medical_center?.id, getCompletedCount]);
 
   useEffect(() => {
     // تحقق من وجود جلسة المركز
@@ -50,22 +76,36 @@ const ClinicDashboard = () => {
     }
   }, [navigate]);
 
-  const handleNextPatient = () => {
-    const currentIndex = queue.findIndex(p => p.id === currentPatient?.id);
-    if (currentIndex < queue.length - 1) {
-      setCurrentPatient(queue[currentIndex + 1]);
+  const handleNextPatient = async () => {
+    const currentBooking = getCurrentBooking();
+    if (currentBooking) {
+      // Mark current booking as completed
+      await updateBookingStatus(currentBooking.id, 'completed');
+      // Update completed count
+      setCompletedCount(prev => prev + 1);
     }
   };
 
-  const handleSkipPatient = () => {
-    // Move current patient to end of queue
-    const updatedQueue = queue.filter(p => p.id !== currentPatient?.id);
-    const skippedPatient = { ...currentPatient, status: "waiting" as const };
-    const newQueue = [...updatedQueue, skippedPatient];
-    setQueue(newQueue);
-    
-    if (updatedQueue.length > 0) {
-      setCurrentPatient(updatedQueue[0]);
+  const handleSkipPatient = async () => {
+    const currentBooking = getCurrentBooking();
+    if (currentBooking) {
+      // Mark current booking as no_show
+      await updateBookingStatus(currentBooking.id, 'no_show');
+    }
+  };
+
+  const handleViewPatientDetails = async (booking: any) => {
+    setSelectedPatient(booking);
+    setLoadingPatientDetails(true);
+    try {
+      const details = await getPatientDetails(booking.patient_id);
+      console.log('Patient details loaded:', details);
+      setPatientDetails(details);
+    } catch (error) {
+      console.error('Error loading patient details:', error);
+      setPatientDetails(null);
+    } finally {
+      setLoadingPatientDetails(false);
     }
   };
 
@@ -91,18 +131,21 @@ const ClinicDashboard = () => {
     navigate('/clinic/auth');
   };
 
-  const waitingPatients = queue.filter(p => p.status === "waiting");
-  const totalWaiting = waitingPatients.length;
+  // Get real data from bookings
+  const currentBooking = getCurrentBooking();
+  const waitingBookings = getWaitingBookings();
+  const totalWaiting = waitingBookings.length;
 
   const clinicInfo = {
     name: clinicSession?.medical_center?.name || "عيادة الدكتور محمد أحمد",
-    todayPatients: 28,
+    todayPatients: bookings.length,
     currentStatus: "مفتوح"
   };
 
   const tabs = [
     { id: "queue", label: "الطابور المباشر", icon: Users },
     { id: "services", label: "إدارة الخدمات", icon: Stethoscope },
+    { id: "notifications", label: "الإشعارات", icon: Bell },
     { id: "settings", label: "الإعدادات", icon: Settings }
   ];
 
@@ -148,7 +191,14 @@ const ClinicDashboard = () => {
                         : "text-muted-foreground hover:bg-muted"
                     }`}
                   >
-                    <Icon className="h-4 w-4 lg:h-5 lg:w-5" />
+                    <div className="relative">
+                      <Icon className="h-4 w-4 lg:h-5 lg:w-5" />
+                      {tab.id === "notifications" && getUnreadCount() > 0 && (
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-xs text-white flex items-center justify-center">
+                          {getUnreadCount()}
+                        </div>
+                      )}
+                    </div>
                     <span className="text-sm lg:text-base">{tab.label}</span>
                   </button>
                 );
@@ -162,7 +212,7 @@ const ClinicDashboard = () => {
           {selectedTab === "queue" && (
             <div className="space-y-4 sm:space-y-6">
               {/* Current Patient Card */}
-              {currentPatient && (
+              {currentBooking && (
                 <Card className="border-primary/20 bg-gradient-to-l from-primary/5 to-transparent">
                   <CardHeader className="pb-3 sm:pb-6">
                     <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
@@ -175,20 +225,30 @@ const ClinicDashboard = () => {
                       <div className="space-y-3 sm:space-y-4">
                         <div>
                           <h3 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
-                            رقم {currentPatient.number}
+                            رقم {currentBooking.queue_number}
                           </h3>
                           <p className="text-lg sm:text-xl font-semibold text-card-foreground">
-                            {currentPatient.name}
+                            {currentBooking.patient_name}
                           </p>
-                          <p className="text-primary font-medium text-sm sm:text-base">{currentPatient.service}</p>
+                          <p className="text-primary font-medium text-sm sm:text-base">{currentBooking.service_name}</p>
                           <div className="flex items-center gap-2 text-muted-foreground text-sm sm:text-base">
                             <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
-                            <span>وقت الحجز: {currentPatient.time}</span>
+                            <span>وقت الحجز: {currentBooking.booking_time}</span>
                           </div>
                         </div>
                       </div>
                       
                       <div className="flex flex-col gap-2 sm:gap-3">
+                        <Button 
+                          onClick={() => handleViewPatientDetails(currentBooking)}
+                          variant="outline"
+                          className="flex items-center gap-2 text-sm sm:text-base"
+                          size="lg"
+                        >
+                          <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
+                          <span className="hidden sm:inline">عرض تفاصيل المريض</span>
+                          <span className="sm:hidden">التفاصيل</span>
+                        </Button>
                         <Button 
                           onClick={handleNextPatient}
                           className="bg-accent hover:bg-accent/90 text-accent-foreground flex items-center gap-2 text-sm sm:text-base"
@@ -226,7 +286,7 @@ const ClinicDashboard = () => {
                 <Card>
                   <CardContent className="p-4 sm:p-6 text-center">
                     <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-accent mx-auto mb-2" />
-                    <div className="text-xl sm:text-2xl font-bold text-foreground">23</div>
+                    <div className="text-xl sm:text-2xl font-bold text-foreground">{completedCount}</div>
                     <p className="text-muted-foreground text-sm sm:text-base">تم فحصهم اليوم</p>
                   </CardContent>
                 </Card>
@@ -238,25 +298,47 @@ const ClinicDashboard = () => {
                   <CardTitle className="text-lg sm:text-xl">قائمة الانتظار</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3 sm:space-y-4">
-                    {waitingPatients.map((patient, index) => (
-                      <div key={patient.id} className="flex items-center justify-between p-3 sm:p-4 bg-muted/30 rounded-lg">
-                        <div className="flex items-center gap-3 sm:gap-4">
-                          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                            <span className="font-bold text-primary text-sm sm:text-base">{patient.number}</span>
+                  {bookingsLoading ? (
+                    <div className="text-center py-6">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                      <p className="text-muted-foreground">جاري تحميل الحجوزات...</p>
+                    </div>
+                  ) : waitingBookings.length === 0 ? (
+                    <div className="text-center py-6">
+                      <p className="text-muted-foreground">لا توجد حجوزات في الانتظار</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 sm:space-y-4">
+                      {waitingBookings.map((booking, index) => (
+                        <div key={booking.id} className="flex items-center justify-between p-3 sm:p-4 bg-muted/30 rounded-lg">
+                          <div className="flex items-center gap-3 sm:gap-4">
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                              <span className="font-bold text-primary text-sm sm:text-base">{booking.queue_number}</span>
+                            </div>
+                            <div>
+                              <p className="font-semibold text-card-foreground text-sm sm:text-base">{booking.patient_name}</p>
+                              <p className="text-xs sm:text-sm text-muted-foreground">{booking.service_name}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-semibold text-card-foreground text-sm sm:text-base">{patient.name}</p>
-                            <p className="text-xs sm:text-sm text-muted-foreground">{patient.service}</p>
+                          <div className="flex items-center gap-2">
+                            <div className="text-left">
+                              <p className="text-xs sm:text-sm text-muted-foreground">المرتبة {index + 1}</p>
+                              <p className="text-xs sm:text-sm text-muted-foreground">{booking.booking_time}</p>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleViewPatientDetails(booking)}
+                              className="text-xs"
+                            >
+                              <Eye className="h-3 w-3 mr-1" />
+                              تفاصيل
+                            </Button>
                           </div>
                         </div>
-                        <div className="text-left">
-                          <p className="text-xs sm:text-sm text-muted-foreground">المرتبة {index + 1}</p>
-                          <p className="text-xs sm:text-sm text-muted-foreground">{patient.time}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -268,6 +350,87 @@ const ClinicDashboard = () => {
             </div>
           )}
 
+
+          {selectedTab === "notifications" && (
+            <div className="space-y-4 sm:space-y-6">
+              <Card>
+                <CardHeader className="pb-3 sm:pb-6">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg sm:text-xl">الإشعارات</CardTitle>
+                    {getUnreadCount() > 0 && (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="destructive" className="text-xs">
+                          {getUnreadCount()} غير مقروء
+                        </Badge>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={markAllAsRead}
+                          className="text-xs"
+                        >
+                          تعيين الكل كمقروء
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {notifications.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-6 sm:py-8 text-sm sm:text-base">
+                      لا توجد إشعارات
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {notifications.map((notification) => (
+                        <div
+                          key={notification.id}
+                          className={`p-4 rounded-lg border ${
+                            notification.is_read 
+                              ? 'bg-muted/50 border-muted' 
+                              : 'bg-primary/5 border-primary/20'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h4 className="font-medium text-sm sm:text-base">
+                                  {notification.title}
+                                </h4>
+                                {!notification.is_read && (
+                                  <div className="w-2 h-2 bg-primary rounded-full"></div>
+                                )}
+                              </div>
+                              <p className="text-muted-foreground text-xs sm:text-sm mb-2">
+                                {notification.message}
+                              </p>
+                              {notification.patient_name && (
+                                <p className="text-xs text-muted-foreground">
+                                  المريض: {notification.patient_name}
+                                </p>
+                              )}
+                              <p className="text-xs text-muted-foreground mt-2">
+                                {new Date(notification.created_at).toLocaleString('ar-SA')}
+                              </p>
+                            </div>
+                            {!notification.is_read && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => markAsRead(notification.id)}
+                                className="text-xs"
+                              >
+                                تعيين كمقروء
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           {selectedTab === "settings" && (
             <div className="space-y-4 sm:space-y-6">
@@ -285,6 +448,119 @@ const ClinicDashboard = () => {
           )}
         </div>
       </div>
+
+      {/* Patient Details Dialog */}
+          <Dialog open={!!selectedPatient} onOpenChange={() => setSelectedPatient(null)}>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>تفاصيل المريض</DialogTitle>
+                <DialogDescription>
+                  عرض تفاصيل المريض ومعلومات الحجز
+                </DialogDescription>
+              </DialogHeader>
+          {selectedPatient && (
+            <div className="space-y-6">
+              {/* Patient Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
+                      <User className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold">{patientDetails?.full_name || selectedPatient.patient_name}</h3>
+                      <p className="text-sm text-muted-foreground">رقم الطابور: {selectedPatient.queue_number}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">{patientDetails?.phone || selectedPatient.patient_phone || 'غير متوفر'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">{patientDetails?.email || selectedPatient.patient_email || 'غير متوفر'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">{selectedPatient.booking_date}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">{selectedPatient.booking_time}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="p-4 bg-muted/50 rounded-lg">
+                    <h4 className="font-medium mb-2">تفاصيل الخدمة</h4>
+                    <p className="text-sm text-muted-foreground mb-1">
+                      <strong>الخدمة:</strong> {selectedPatient.service_name}
+                    </p>
+                    <p className="text-sm text-muted-foreground mb-1">
+                      <strong>الطبيب:</strong> {selectedPatient.doctor_name}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      <strong>السعر:</strong> {selectedPatient.service_price} ريال
+                    </p>
+                  </div>
+
+                  <div className="p-4 bg-muted/50 rounded-lg">
+                    <h4 className="font-medium mb-2">حالة الحجز</h4>
+                    <Badge 
+                      variant={selectedPatient.status === 'pending' ? 'secondary' : 
+                              selectedPatient.status === 'confirmed' ? 'default' : 
+                              selectedPatient.status === 'in_progress' ? 'default' : 'destructive'}
+                    >
+                      {selectedPatient.status === 'pending' ? 'في الانتظار' :
+                       selectedPatient.status === 'confirmed' ? 'مؤكد' :
+                       selectedPatient.status === 'in_progress' ? 'قيد التنفيذ' :
+                       selectedPatient.status === 'completed' ? 'مكتمل' :
+                       selectedPatient.status === 'cancelled' ? 'ملغي' : 'لم يحضر'}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
+              {/* Additional Details */}
+              {loadingPatientDetails ? (
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-2"></div>
+                  <p className="text-sm text-muted-foreground">جاري تحميل التفاصيل الإضافية...</p>
+                </div>
+              ) : patientDetails && (
+                <div className="p-4 bg-muted/50 rounded-lg">
+                  <h4 className="font-medium mb-2">معلومات إضافية</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground mb-1">
+                        <strong>تاريخ التسجيل:</strong>
+                      </p>
+                      <p>{new Date(patientDetails.created_at).toLocaleDateString('ar-SA')}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground mb-1">
+                        <strong>معرف المستخدم:</strong>
+                      </p>
+                      <p className="font-mono text-xs">{patientDetails.id}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Notes */}
+              {selectedPatient.notes && (
+                <div className="p-4 bg-muted/50 rounded-lg">
+                  <h4 className="font-medium mb-2">ملاحظات</h4>
+                  <p className="text-sm text-muted-foreground">{selectedPatient.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

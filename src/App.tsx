@@ -8,6 +8,7 @@ import PatientLogin from "./pages/patient/PatientLogin";
 import PatientDashboard from "./pages/patient/PatientDashboard";
 import CenterDetails from "./pages/patient/CenterDetails";
 import QueueTracking from "./pages/patient/QueueTracking";
+import BookingForm from "./pages/patient/BookingForm";
 import ClinicDashboard from "./pages/clinic/ClinicDashboard";
 import ClinicAuthSimple from "./pages/clinic/ClinicAuthSimple";
 import ClinicLogin from "./pages/clinic/ClinicLogin";
@@ -29,6 +30,7 @@ const App = () => (
           <Route path="/patient/login" element={<PatientLogin />} />
           <Route path="/patient/dashboard" element={<PatientDashboard />} />
           <Route path="/patient/center/:id" element={<CenterDetails />} />
+          <Route path="/patient/booking/:centerId/:serviceId" element={<BookingForm />} />
           <Route path="/patient/queue/:bookingId" element={<QueueTracking />} />
           <Route path="/clinic/login" element={<ClinicLogin />} />
           <Route path="/clinic/auth" element={<ClinicAuthSimple />} />

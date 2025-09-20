@@ -7,7 +7,6 @@ import { ArrowRight, MapPin, Star, User, Stethoscope, Calendar } from "lucide-re
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useMedicalCenter } from "@/hooks/useMedicalCenter";
-import { supabase } from "@/integrations/supabase/client";
 
 const CenterDetails = () => {
   const { id } = useParams();
@@ -27,74 +26,8 @@ const CenterDetails = () => {
       return;
     }
 
-    try {
-      // Get the service details
-      const service = services.find(s => s.id === serviceId);
-      if (!service || !center) {
-        throw new Error("الخدمة أو المركز غير موجود");
-      }
-
-      // Get today's date
-      const today = new Date();
-      const bookingDate = today.toISOString().split('T')[0];
-      const bookingTime = today.toTimeString().split(' ')[0].substring(0, 5);
-
-      // Get next queue number for today
-      const { data: nextQueueNumber } = await supabase
-        .rpc('get_next_queue_number', {
-          p_medical_center_id: center.id,
-          p_booking_date: bookingDate
-        });
-
-      // Generate QR code
-      const { data: qrCode } = await supabase
-        .rpc('generate_booking_qr_code');
-
-      // Create booking
-      const { data: booking, error } = await supabase
-        .from('bookings')
-        .insert({
-          patient_id: user.id,
-          medical_center_id: center.id,
-          service_id: serviceId,
-          doctor_id: null, // We'll set this to null for now since we don't have doctor IDs in mock data
-          booking_date: bookingDate,
-          booking_time: bookingTime,
-          queue_number: nextQueueNumber || 1,
-          qr_code: qrCode,
-          status: 'pending'
-        })
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      // Create queue tracking entry
-      await supabase
-        .from('queue_tracking')
-        .insert({
-          booking_id: booking.id,
-          current_number: 0,
-          waiting_count: 0,
-          status: 'waiting'
-        });
-
-      toast({
-        title: "تم حجز الدور بنجاح",
-        description: `تم حجز دورك لخدمة ${serviceName} - رقم الدور: ${nextQueueNumber || 1}`,
-      });
-      
-      navigate(`/patient/queue/${booking.id}`);
-    } catch (error) {
-      console.error('Error creating booking:', error);
-      toast({
-        title: "خطأ في الحجز",
-        description: "حدث خطأ أثناء حجز الدور، حاول مرة أخرى",
-        variant: "destructive",
-      });
-    }
+    // Navigate to booking form
+    navigate(`/patient/booking/${id}/${serviceId}`);
   };
 
   // Show loading state
@@ -131,7 +64,7 @@ const CenterDetails = () => {
       {/* Header */}
       <div className="bg-gradient-to-l from-primary/5 to-accent/5 border-b">
         <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
-          <div className="flex items-center gap-4 mb-4 sm:mb-6">
+          <div className="flex justify-center sm:justify-start mb-4 sm:mb-6">
             <Link
               to="/patient/dashboard"
               className="text-primary hover:text-primary/80 transition-colors flex items-center gap-2 text-sm sm:text-base"
@@ -142,31 +75,31 @@ const CenterDetails = () => {
           </div>
 
           {/* Center Hero */}
-          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-start">
-            <div className="w-24 h-24 sm:w-32 sm:h-32 bg-muted rounded-2xl flex items-center justify-center flex-shrink-0 mx-auto sm:mx-0">
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-center sm:items-start">
+            <div className="w-24 h-24 sm:w-32 sm:h-32 bg-muted rounded-2xl flex items-center justify-center flex-shrink-0">
               <Stethoscope className="h-12 w-12 sm:h-16 sm:w-16 text-muted-foreground" />
             </div>
             
-            <div className="flex-1 text-center sm:text-right">
+            <div className="flex-1 text-center sm:text-right w-full">
               <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">{center.name}</h1>
               <p className="text-lg sm:text-xl text-primary font-medium mb-3">{center.specialty}</p>
               
-              <div className="flex flex-col sm:flex-row items-center sm:items-center gap-3 sm:gap-6 text-muted-foreground mb-4">
-                <div className="flex items-center gap-1">
+              <div className="flex flex-col sm:flex-row items-center sm:items-start gap-3 sm:gap-6 text-muted-foreground mb-4">
+                <div className="flex items-center justify-center gap-1">
                   <Star className="h-3 w-3 sm:h-4 sm:w-4 fill-yellow-400 text-yellow-400" />
                   <span className="text-sm sm:text-base">{center.rating}</span>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center justify-center gap-1">
                   <MapPin className="h-3 w-3 sm:h-4 sm:w-4" />
                   <span className="text-sm sm:text-base">{center.address}</span>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center justify-center gap-1">
                   <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
                   <span className="text-sm sm:text-base">{center.hours}</span>
                 </div>
               </div>
               
-              <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">{center.description}</p>
+              <p className="text-sm sm:text-base text-muted-foreground leading-relaxed text-center sm:text-right">{center.description}</p>
             </div>
           </div>
         </div>

@@ -132,11 +132,90 @@ export const useBookings = () => {
     fetchBookings();
   }, [user]);
 
+  const createBooking = async (bookingData: {
+    medical_center_id: string;
+    service_id: string;
+    notes?: string;
+  }) => {
+    if (!user) {
+      throw new Error('يجب تسجيل الدخول أولاً');
+    }
+
+    try {
+      // Get today's date
+      const today = new Date();
+      const bookingDate = today.toISOString().split('T')[0];
+      const bookingTime = today.toTimeString().split(' ')[0].substring(0, 5);
+
+      // Get next queue number for today
+      const { data: nextQueueNumber } = await supabase
+        .rpc('get_next_queue_number', {
+          p_medical_center_id: bookingData.medical_center_id,
+          p_booking_date: bookingDate
+        });
+
+      // Generate QR code
+      const { data: qrCode } = await supabase
+        .rpc('generate_booking_qr_code');
+
+        // Create booking
+        const { data: booking, error } = await supabase
+          .from('bookings')
+          .insert({
+            patient_id: user.id,
+            medical_center_id: bookingData.medical_center_id,
+            service_id: bookingData.service_id,
+            doctor_id: null,
+            booking_date: bookingDate,
+            booking_time: bookingTime,
+            queue_number: nextQueueNumber || 1,
+            qr_code: qrCode,
+            status: 'pending',
+            notes: bookingData.notes
+          })
+          .select()
+          .single();
+
+      if (error) {
+        throw error;
+      }
+
+        // Create queue tracking entry
+        await supabase
+          .from('queue_tracking')
+          .insert({
+            booking_id: booking.id,
+            current_number: 0,
+            waiting_count: 0,
+            status: 'waiting'
+          });
+
+        // Create notification for the patient
+        await supabase
+          .rpc('create_booking_notification', {
+            p_patient_id: user.id,
+            p_booking_id: booking.id,
+            p_title: 'حجز جديد',
+            p_message: 'تم إنشاء حجز جديد في المركز الطبي',
+            p_type: 'booking_confirmed'
+          });
+
+        // Refresh bookings list
+        await fetchBookings();
+
+        return booking;
+    } catch (err) {
+      console.error('Error creating booking:', err);
+      throw err;
+    }
+  };
+
   return {
     bookings,
     loading,
     error,
     refetch: fetchBookings,
+    createBooking,
     cancelBooking,
     deleteBooking,
   };
