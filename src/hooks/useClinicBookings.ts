@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { RealtimeChannel } from '@supabase/supabase-js';
 
 export interface ClinicBooking {
   id: string;
@@ -28,8 +29,10 @@ export const useClinicBookings = (medicalCenterId: string) => {
   const [bookings, setBookings] = useState<ClinicBooking[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
+  const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
 
-  const fetchBookings = async () => {
+  const fetchBookings = useCallback(async () => {
     if (!medicalCenterId) return;
 
     try {
@@ -83,16 +86,98 @@ export const useClinicBookings = (medicalCenterId: string) => {
       });
 
       setBookings(transformedBookings);
+      setLastUpdateTime(new Date());
     } catch (err) {
       console.error('Error fetching clinic bookings:', err);
       setError(err instanceof Error ? err.message : 'حدث خطأ في جلب الحجوزات');
     } finally {
       setLoading(false);
     }
-  };
+  }, [medicalCenterId]);
+
+  // Professional Realtime subscription with proper debouncing
+  const setupRealtimeSubscription = useCallback(() => {
+    if (!medicalCenterId) return;
+
+    console.log('Setting up professional Realtime subscription for medical center:', medicalCenterId);
+
+    // Create a debounced update function
+    let updateTimeout: NodeJS.Timeout | null = null;
+    
+    const debouncedFetch = () => {
+      if (updateTimeout) {
+        clearTimeout(updateTimeout);
+      }
+      
+      updateTimeout = setTimeout(() => {
+        console.log('Realtime update: Refreshing bookings');
+        fetchBookings();
+      }, 500); // 500ms debounce
+    };
+
+    // Create Realtime subscription
+    const channel = supabase
+      .channel(`clinic-bookings-${medicalCenterId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'bookings',
+          filter: `medical_center_id=eq.${medicalCenterId}`
+        },
+        (payload) => {
+          console.log('Realtime booking change detected:', {
+            eventType: payload.eventType,
+            new: payload.new,
+            old: payload.old
+          });
+          
+          // Only refresh for relevant changes
+          if (payload.eventType === 'INSERT' || 
+              payload.eventType === 'DELETE' ||
+              (payload.eventType === 'UPDATE' && payload.new?.status !== payload.old?.status)) {
+            debouncedFetch();
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status);
+        
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Successfully connected to Realtime updates');
+          setIsRealtimeConnected(true);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Realtime subscription error');
+          setIsRealtimeConnected(false);
+        } else if (status === 'CLOSED') {
+          console.log('🔌 Realtime subscription closed');
+          setIsRealtimeConnected(false);
+        }
+      });
+
+    // Return cleanup function
+    return () => {
+      console.log('Cleaning up Realtime subscription');
+      if (updateTimeout) {
+        clearTimeout(updateTimeout);
+      }
+      supabase.removeChannel(channel);
+    };
+  }, [medicalCenterId, fetchBookings]);
 
   const updateBookingStatus = async (bookingId: string, status: ClinicBooking['status']) => {
     try {
+      // Update local state immediately for instant UI feedback
+      setBookings(prevBookings => 
+        prevBookings.map(booking => 
+          booking.id === bookingId 
+            ? { ...booking, status }
+            : booking
+        )
+      );
+
+      // Update in database
       const { error } = await supabase
         .from('bookings')
         .update({ status })
@@ -100,11 +185,21 @@ export const useClinicBookings = (medicalCenterId: string) => {
 
       if (error) throw error;
 
-      // Refresh bookings
-      await fetchBookings();
+      console.log('✅ Booking status updated successfully');
     } catch (err) {
-      console.error('Error updating booking status:', err);
+      console.error('❌ Error updating booking status:', err);
+      
+      // Revert local state on error
+      setBookings(prevBookings => 
+        prevBookings.map(booking => 
+          booking.id === bookingId 
+            ? { ...booking, status: booking.status } // Revert to original status
+            : booking
+        )
+      );
+      
       setError(err instanceof Error ? err.message : 'حدث خطأ في تحديث حالة الحجز');
+      throw err;
     }
   };
 
@@ -116,7 +211,7 @@ export const useClinicBookings = (medicalCenterId: string) => {
     return bookings.filter(booking => booking.status === 'pending' || booking.status === 'confirmed');
   };
 
-  const getCompletedCount = async () => {
+  const getCompletedCount = useCallback(async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
       const { count, error } = await supabase
@@ -132,7 +227,7 @@ export const useClinicBookings = (medicalCenterId: string) => {
       console.error('Error getting completed count:', err);
       return 0;
     }
-  };
+  }, [medicalCenterId]);
 
   const getPatientDetails = async (patientId: string) => {
     try {
@@ -147,14 +242,33 @@ export const useClinicBookings = (medicalCenterId: string) => {
     }
   };
 
+  // Professional setup with proper cleanup
   useEffect(() => {
+    if (!medicalCenterId) return;
+
+    console.log('Initializing clinic bookings for medical center:', medicalCenterId);
+
+    // Initial fetch
     fetchBookings();
-  }, [medicalCenterId]);
+
+    // Setup Realtime subscription
+    const cleanup = setupRealtimeSubscription();
+
+    // Cleanup function
+    return () => {
+      console.log('Cleaning up clinic bookings hook');
+      if (cleanup) {
+        cleanup();
+      }
+    };
+  }, [medicalCenterId, fetchBookings, setupRealtimeSubscription]);
 
   return {
     bookings,
     loading,
     error,
+    isRealtimeConnected,
+    lastUpdateTime,
     refetch: fetchBookings,
     updateBookingStatus,
     getCurrentBooking,

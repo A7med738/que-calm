@@ -4,20 +4,28 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
-import { ArrowLeft, Users, Clock, User, SkipForward, CheckCircle, Settings, Stethoscope, Bell, Eye, Phone, Mail, Calendar } from "lucide-react";
+import { ArrowLeft, Users, Clock, User, SkipForward, CheckCircle, Settings, Stethoscope, Bell, Eye, Phone, Mail, Calendar, Wifi, WifiOff, RefreshCw } from "lucide-react";
 import ServicesManagement from "@/components/clinic/ServicesManagement";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useClinicBookings } from "@/hooks/useClinicBookings";
 import { supabase } from "@/integrations/supabase/client";
 
-// Mock queue data
-const queueData = [
-  { id: 1, number: 18, name: "أحمد محمد علي", service: "كشف وتشخيص", time: "2:30 م", status: "current" },
-  { id: 2, number: 19, name: "فاطمة أحمد سالم", service: "تنظيف الأسنان", time: "2:35 م", status: "waiting" },
-  { id: 3, number: 20, name: "محمد عبدالله خالد", service: "حشو الأسنان", time: "2:40 م", status: "waiting" },
-  { id: 4, number: 21, name: "نورا سعد محمود", service: "كشف وتشخيص", time: "2:45 م", status: "waiting" },
-  { id: 5, number: 22, name: "عبدالرحمن علي حسن", service: "استشارة تقويم", time: "2:50 م", status: "waiting" }
-];
+// Helper function to calculate remaining turns
+const calculateRemainingTurns = (currentQueueNumber: number, waitingBookings: any[]) => {
+  if (!currentQueueNumber || waitingBookings.length === 0) return waitingBookings.length;
+  
+  // Find the highest queue number in waiting bookings
+  const maxQueueNumber = Math.max(...waitingBookings.map(booking => booking.queue_number));
+  
+  // Calculate remaining turns
+  return maxQueueNumber - currentQueueNumber;
+};
+
+// Helper function to calculate turns remaining for a specific booking
+const calculateTurnsRemaining = (bookingQueueNumber: number, currentQueueNumber: number) => {
+  if (!currentQueueNumber) return 0;
+  return Math.max(0, bookingQueueNumber - currentQueueNumber);
+};
 
 const ClinicDashboard = () => {
   const [selectedTab, setSelectedTab] = useState("queue");
@@ -26,6 +34,8 @@ const ClinicDashboard = () => {
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [patientDetails, setPatientDetails] = useState<any>(null);
   const [loadingPatientDetails, setLoadingPatientDetails] = useState(false);
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
+  const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
   const navigate = useNavigate();
   
   // Get notifications for the current user (medical center owner)
@@ -35,6 +45,9 @@ const ClinicDashboard = () => {
   const { 
     bookings, 
     loading: bookingsLoading, 
+    isRealtimeConnected: hookRealtimeConnected,
+    lastUpdateTime: hookLastUpdateTime,
+    refetch,
     getCurrentBooking, 
     getWaitingBookings, 
     updateBookingStatus,
@@ -42,12 +55,28 @@ const ClinicDashboard = () => {
     getPatientDetails
   } = useClinicBookings(clinicSession?.medical_center?.id || '');
 
-  // Fetch completed count when medical center ID is available
+  // Fetch completed count when medical center ID is available (with debouncing)
   useEffect(() => {
     if (clinicSession?.medical_center?.id) {
-      getCompletedCount().then(setCompletedCount);
+      const timeout = setTimeout(() => {
+        getCompletedCount().then(setCompletedCount);
+      }, 1000); // 1 second delay to avoid rapid updates
+      
+      return () => clearTimeout(timeout);
     }
   }, [clinicSession?.medical_center?.id, getCompletedCount]);
+
+  // Monitor realtime connection status
+  useEffect(() => {
+    setIsRealtimeConnected(hookRealtimeConnected);
+  }, [hookRealtimeConnected]);
+
+  // Update last update time from hook
+  useEffect(() => {
+    if (hookLastUpdateTime) {
+      setLastUpdateTime(hookLastUpdateTime);
+    }
+  }, [hookLastUpdateTime]);
 
   useEffect(() => {
     // تحقق من وجود جلسة المركز
@@ -79,18 +108,36 @@ const ClinicDashboard = () => {
   const handleNextPatient = async () => {
     const currentBooking = getCurrentBooking();
     if (currentBooking) {
-      // Mark current booking as completed
-      await updateBookingStatus(currentBooking.id, 'completed');
-      // Update completed count
-      setCompletedCount(prev => prev + 1);
+      try {
+        // Mark current booking as completed
+        await updateBookingStatus(currentBooking.id, 'completed');
+        // Update completed count
+        setCompletedCount(prev => prev + 1);
+      } catch (error) {
+        console.error('Error updating booking status:', error);
+      }
     }
   };
 
   const handleSkipPatient = async () => {
     const currentBooking = getCurrentBooking();
     if (currentBooking) {
-      // Mark current booking as no_show
-      await updateBookingStatus(currentBooking.id, 'no_show');
+      try {
+        // Mark current booking as no_show
+        await updateBookingStatus(currentBooking.id, 'no_show');
+      } catch (error) {
+        console.error('Error updating booking status:', error);
+      }
+    }
+  };
+
+  const handleManualRefresh = async () => {
+    try {
+      await refetch();
+      await getCompletedCount().then(setCompletedCount);
+      setLastUpdateTime(new Date());
+    } catch (error) {
+      console.error('Error refreshing data:', error);
     }
   };
 
@@ -132,9 +179,10 @@ const ClinicDashboard = () => {
   };
 
   // Get real data from bookings
-  const currentBooking = getCurrentBooking();
-  const waitingBookings = getWaitingBookings();
-  const totalWaiting = waitingBookings.length;
+      const currentBooking = getCurrentBooking();
+      const waitingBookings = getWaitingBookings();
+      const totalWaiting = waitingBookings.length;
+      const remainingTurns = calculateRemainingTurns(currentBooking?.queue_number || 0, waitingBookings);
 
   const clinicInfo = {
     name: clinicSession?.medical_center?.name || "عيادة الدكتور محمد أحمد",
@@ -160,9 +208,32 @@ const ClinicDashboard = () => {
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 mt-1">
                 <span className="text-xs sm:text-sm text-muted-foreground">اليوم: {clinicInfo.todayPatients} مريض</span>
                 <Badge className="bg-accent text-accent-foreground text-xs">{clinicInfo.currentStatus}</Badge>
+                <div className="flex items-center gap-1">
+                  {isRealtimeConnected ? (
+                    <>
+                      <Wifi className="h-3 w-3 text-green-500" />
+                      <span className="text-xs text-green-600">مباشر</span>
+                    </>
+                  ) : (
+                    <>
+                      <WifiOff className="h-3 w-3 text-red-500" />
+                      <span className="text-xs text-red-600">غير متصل</span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
             <div className="flex gap-2">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleManualRefresh}
+                disabled={bookingsLoading}
+                className="flex items-center gap-1"
+              >
+                <RefreshCw className={`h-4 w-4 ${bookingsLoading ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">تحديث</span>
+              </Button>
               <Button variant="ghost" size="sm" onClick={handleSignOut}>
                 تسجيل الخروج
               </Button>
@@ -231,10 +302,20 @@ const ClinicDashboard = () => {
                             {currentBooking.patient_name}
                           </p>
                           <p className="text-primary font-medium text-sm sm:text-base">{currentBooking.service_name}</p>
-                          <div className="flex items-center gap-2 text-muted-foreground text-sm sm:text-base">
-                            <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
-                            <span>وقت الحجز: {currentBooking.booking_time}</span>
-                          </div>
+                              <div className="flex items-center gap-2 text-muted-foreground text-sm sm:text-base">
+                                <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
+                                <span>وقت الحجز: {currentBooking.booking_time}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-blue-600 text-sm sm:text-base font-medium">
+                                <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+                                <span>متبقي: {remainingTurns} دور</span>
+                              </div>
+                              {waitingBookings.length > 0 && (
+                                <div className="flex items-center gap-2 text-muted-foreground text-xs sm:text-sm">
+                                  <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
+                                  <span>آخر دور: {Math.max(...waitingBookings.map(b => b.queue_number))}</span>
+                                </div>
+                              )}
                         </div>
                       </div>
                       
@@ -274,29 +355,56 @@ const ClinicDashboard = () => {
                 </Card>
               )}
 
-              {/* Queue Overview */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                <Card>
-                  <CardContent className="p-4 sm:p-6 text-center">
-                    <Users className="h-6 w-6 sm:h-8 sm:w-8 text-primary mx-auto mb-2" />
-                    <div className="text-xl sm:text-2xl font-bold text-foreground">{totalWaiting}</div>
-                    <p className="text-muted-foreground text-sm sm:text-base">في الانتظار</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4 sm:p-6 text-center">
-                    <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-accent mx-auto mb-2" />
-                    <div className="text-xl sm:text-2xl font-bold text-foreground">{completedCount}</div>
-                    <p className="text-muted-foreground text-sm sm:text-base">تم فحصهم اليوم</p>
-                  </CardContent>
-                </Card>
-              </div>
+                  {/* Queue Overview */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+                    <Card>
+                      <CardContent className="p-4 sm:p-6 text-center">
+                        <Users className="h-6 w-6 sm:h-8 sm:w-8 text-primary mx-auto mb-2" />
+                        <div className="text-xl sm:text-2xl font-bold text-foreground">{totalWaiting}</div>
+                        <p className="text-muted-foreground text-sm sm:text-base">في الانتظار</p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-4 sm:p-6 text-center">
+                        <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500 mx-auto mb-2" />
+                        <div className="text-xl sm:text-2xl font-bold text-foreground">{remainingTurns}</div>
+                        <p className="text-muted-foreground text-sm sm:text-base">أدوار متبقية</p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-4 sm:p-6 text-center">
+                        <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-accent mx-auto mb-2" />
+                        <div className="text-xl sm:text-2xl font-bold text-foreground">{completedCount}</div>
+                        <p className="text-muted-foreground text-sm sm:text-base">تم فحصهم اليوم</p>
+                      </CardContent>
+                    </Card>
+                  </div>
 
-              {/* Waiting List */}
-              <Card>
-                <CardHeader className="pb-3 sm:pb-6">
-                  <CardTitle className="text-lg sm:text-xl">قائمة الانتظار</CardTitle>
-                </CardHeader>
+                  {/* Waiting List */}
+                  <Card>
+                    <CardHeader className="pb-3 sm:pb-6">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-lg sm:text-xl">قائمة الانتظار</CardTitle>
+                        <div className="flex items-center gap-2">
+                          {isRealtimeConnected ? (
+                            <>
+                              <Wifi className="h-4 w-4 text-green-500" />
+                              <span className="text-xs text-green-600">تحديث مباشر</span>
+                            </>
+                          ) : (
+                            <>
+                              <WifiOff className="h-4 w-4 text-red-500" />
+                              <span className="text-xs text-red-600">غير متصل</span>
+                            </>
+                          )}
+                          {lastUpdateTime && (
+                            <span className="text-xs text-muted-foreground">
+                              آخر تحديث: {lastUpdateTime.toLocaleTimeString('ar-SA')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </CardHeader>
                 <CardContent>
                   {bookingsLoading ? (
                     <div className="text-center py-6">
@@ -306,6 +414,15 @@ const ClinicDashboard = () => {
                   ) : waitingBookings.length === 0 ? (
                     <div className="text-center py-6">
                       <p className="text-muted-foreground">لا توجد حجوزات في الانتظار</p>
+                      {isRealtimeConnected ? (
+                        <p className="text-xs text-green-600 mt-2">
+                          الحجوزات الجديدة ستظهر تلقائياً
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          اضغط زر "تحديث" في الأعلى لتحميل الحجوزات الجديدة
+                        </p>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-3 sm:space-y-4">
@@ -324,6 +441,9 @@ const ClinicDashboard = () => {
                             <div className="text-left">
                               <p className="text-xs sm:text-sm text-muted-foreground">المرتبة {index + 1}</p>
                               <p className="text-xs sm:text-sm text-muted-foreground">{booking.booking_time}</p>
+                              <p className="text-xs text-blue-600 font-medium">
+                                متبقي: {calculateTurnsRemaining(booking.queue_number, currentBooking?.queue_number || 0)} دور
+                              </p>
                             </div>
                             <Button
                               variant="outline"
