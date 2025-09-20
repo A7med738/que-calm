@@ -37,41 +37,17 @@ export const useUserRole = () => {
         .single();
 
       if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
-        // Handle different error types gracefully
-        if (error.code === '42P17' || error.message?.includes('infinite recursion')) {
-          console.warn('Policy error detected, using fallback method');
-          setUserRole(null);
-          return;
-        }
-        
-        // Handle 406 Not Acceptable errors
-        if (error.code === 'PGRST200' || error.message?.includes('406')) {
-          console.warn('406 error detected, user likely has no role - defaulting to patient');
-          setUserRole(null);
-          return;
-        }
-        
-        throw error;
+        // Handle all error types gracefully - just default to patient role
+        console.warn('Error fetching user role, defaulting to patient:', error.message);
+        setUserRole(null);
+        return;
       }
 
       setUserRole(data || null);
     } catch (err) {
-      console.error('Error fetching user role:', err);
-      
-      // Handle various error types gracefully
-      if (err instanceof Error) {
-        if (err.message.includes('infinite recursion') || 
-            err.message.includes('42P17') ||
-            err.message.includes('406') ||
-            err.message.includes('PGRST200')) {
-          console.warn('Policy or access error, defaulting to patient role');
-          setUserRole(null);
-          return;
-        }
-      }
-      
-      // Only set error for unexpected issues
-      setError(err instanceof Error ? err.message : 'حدث خطأ في جلب دور المستخدم');
+      console.warn('Exception fetching user role, defaulting to patient:', err);
+      // Always default to patient role on any error
+      setUserRole(null);
     } finally {
       setLoading(false);
     }
