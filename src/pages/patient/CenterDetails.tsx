@@ -7,6 +7,7 @@ import { ArrowRight, MapPin, Star, User, Stethoscope, Calendar } from "lucide-re
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useMedicalCenter } from "@/hooks/useMedicalCenter";
+import PatientBottomNavigation from "@/components/patient/PatientBottomNavigation";
 
 const CenterDetails = () => {
   const { id } = useParams();
@@ -175,6 +176,12 @@ const CenterDetails = () => {
         </div>
 
       </div>
+
+      {/* Bottom Navigation */}
+      <PatientBottomNavigation />
+      
+      {/* Add bottom padding to prevent content from being hidden behind the bottom nav */}
+      <div className="h-20"></div>
     </div>
   );
 };

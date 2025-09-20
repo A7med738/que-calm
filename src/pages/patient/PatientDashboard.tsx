@@ -31,6 +31,7 @@ import { useBookings } from "@/hooks/useBookings";
 import { useMedicalCenters } from "@/hooks/useMedicalCenters";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useToast } from "@/hooks/use-toast";
+import PatientBottomNavigation from "@/components/patient/PatientBottomNavigation";
 
 const PatientDashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -833,59 +834,9 @@ const PatientDashboard = () => {
       </div>
       )}
 
-      {/* Bottom Navigation Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
-        <div className="flex items-center justify-around py-2">
-          <button
-            onClick={() => setActiveTab("dashboard")}
-            className={`flex flex-col items-center gap-1 py-2 px-3 rounded-lg transition-colors ${
-              activeTab === "dashboard"
-                ? "text-primary bg-primary/10"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Building2 className="h-5 w-5" />
-            <span className="text-xs font-medium">المراكز</span>
-          </button>
-          
-          <button
-            onClick={() => setActiveTab("favorites")}
-            className={`flex flex-col items-center gap-1 py-2 px-3 rounded-lg transition-colors ${
-              activeTab === "favorites"
-                ? "text-primary bg-primary/10"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Heart className="h-5 w-5" />
-            <span className="text-xs font-medium">المفضلة</span>
-          </button>
-          
-          <button
-            onClick={() => setActiveTab("bookings")}
-            className={`flex flex-col items-center gap-1 py-2 px-3 rounded-lg transition-colors ${
-              activeTab === "bookings"
-                ? "text-primary bg-primary/10"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Calendar className="h-5 w-5" />
-            <span className="text-xs font-medium">حجوزاتي</span>
-          </button>
-          
-          <button
-            onClick={() => setActiveTab("profile")}
-            className={`flex flex-col items-center gap-1 py-2 px-3 rounded-lg transition-colors ${
-              activeTab === "profile"
-                ? "text-primary bg-primary/10"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <User className="h-5 w-5" />
-            <span className="text-xs font-medium">حسابي</span>
-          </button>
-        </div>
-      </div>
-
+      {/* Bottom Navigation */}
+      <PatientBottomNavigation />
+      
       {/* Add bottom padding to prevent content from being hidden behind the bottom nav */}
       <div className="h-20"></div>
 

@@ -6,6 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { ArrowRight, Users, Clock, CheckCircle, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import PatientBottomNavigation from "@/components/patient/PatientBottomNavigation";
 
 const QueueTracking = () => {
   const { bookingId } = useParams();
@@ -18,10 +19,14 @@ const QueueTracking = () => {
   // Fetch real booking data
   useEffect(() => {
     const fetchBookingData = async () => {
-      if (!bookingId || !user) return;
+      if (!bookingId || !user) {
+        console.log('QueueTracking: Missing bookingId or user', { bookingId, user: user?.id });
+        return;
+      }
       
       try {
         setLoading(true);
+        console.log('QueueTracking: Fetching booking data for ID:', bookingId);
         
         // Get booking details
         const { data: bookingData, error: bookingError } = await supabase
@@ -31,8 +36,12 @@ const QueueTracking = () => {
           .eq('patient_id', user.id)
           .single();
 
-        if (bookingError) throw bookingError;
+        if (bookingError) {
+          console.error('QueueTracking: Error fetching booking:', bookingError);
+          throw bookingError;
+        }
         
+        console.log('QueueTracking: Booking data fetched successfully:', bookingData);
         setBooking(bookingData);
         setMyNumber(bookingData.queue_number);
 
@@ -237,6 +246,12 @@ const QueueTracking = () => {
           </Button>
         </div>
       </div>
+
+      {/* Bottom Navigation */}
+      <PatientBottomNavigation />
+      
+      {/* Add bottom padding to prevent content from being hidden behind the bottom nav */}
+      <div className="h-20"></div>
     </div>
   );
 };

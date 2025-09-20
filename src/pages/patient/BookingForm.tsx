@@ -24,6 +24,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useMedicalCenter } from '@/hooks/useMedicalCenter';
 import { useBookings } from '@/hooks/useBookings';
 import { useToast } from '@/hooks/use-toast';
+import PatientBottomNavigation from '@/components/patient/PatientBottomNavigation';
 
 interface BookingFormData {
   notes: string;
@@ -78,19 +79,36 @@ const BookingForm = () => {
     if (!selectedService || !center) return;
 
     try {
-      await createBooking({
+      console.log('Creating booking with data:', {
         medical_center_id: center.id,
         service_id: selectedService.id,
         notes: formData.notes
       });
+
+      const booking = await createBooking({
+        medical_center_id: center.id,
+        service_id: selectedService.id,
+        notes: formData.notes
+      });
+
+      console.log('Booking created successfully:', booking);
 
       toast({
         title: "تم الحجز بنجاح",
         description: "تم تأكيد حجزك وسيتم إشعارك عند اقتراب دورك",
       });
 
-      navigate(`/patient/queue-tracking/${center.id}`);
+      // Navigate to queue tracking with the booking ID
+      if (booking && booking.id) {
+        console.log('Navigating to queue tracking with booking ID:', booking.id);
+        navigate(`/patient/queue/${booking.id}`);
+      } else {
+        console.log('No booking ID available, navigating to dashboard');
+        // Fallback to dashboard if booking ID is not available
+        navigate('/patient/dashboard');
+      }
     } catch (error) {
+      console.error('Error in handleConfirmBooking:', error);
       toast({
         title: "خطأ في الحجز",
         description: "حدث خطأ أثناء تأكيد الحجز، يرجى المحاولة مرة أخرى",
@@ -379,6 +397,12 @@ const BookingForm = () => {
           )}
         </div>
       </div>
+
+      {/* Bottom Navigation */}
+      <PatientBottomNavigation />
+      
+      {/* Add bottom padding to prevent content from being hidden behind the bottom nav */}
+      <div className="h-20"></div>
     </div>
   );
 };
