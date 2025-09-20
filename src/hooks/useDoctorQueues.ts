@@ -46,6 +46,8 @@ export const useDoctorQueues = (medicalCenterId: string) => {
       // Get today's date
       const today = new Date().toISOString().split('T')[0];
 
+      console.log('Fetching doctor queues for medical center:', medicalCenterId, 'on date:', today);
+
       // Get all doctor queues for this medical center (try fallback if main function fails)
       let { data, error } = await supabase
         .rpc('get_medical_center_doctor_queues', {
@@ -68,8 +70,12 @@ export const useDoctorQueues = (medicalCenterId: string) => {
         }
       }
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching doctor queues:', error);
+        throw error;
+      }
 
+      console.log('Fetched doctor queues:', data?.length || 0, 'queues');
       setDoctorQueues(data || []);
       setLastUpdateTime(new Date());
     } catch (err) {
@@ -232,7 +238,7 @@ export const useDoctorQueues = (medicalCenterId: string) => {
       }, 500); // 500ms debounce
     };
 
-    // Create Realtime subscription
+    // Create Realtime subscription with multiple tables
     const channel = supabase
       .channel(`doctor-queues-${medicalCenterId}`)
       .on(
@@ -256,6 +262,32 @@ export const useDoctorQueues = (medicalCenterId: string) => {
               (payload.eventType === 'UPDATE' && payload.new?.status !== payload.old?.status)) {
             debouncedFetch();
           }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'doctors',
+          filter: `medical_center_id=eq.${medicalCenterId}`
+        },
+        (payload) => {
+          console.log('Realtime doctor change detected:', payload);
+          debouncedFetch();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'services',
+          filter: `medical_center_id=eq.${medicalCenterId}`
+        },
+        (payload) => {
+          console.log('Realtime service change detected:', payload);
+          debouncedFetch();
         }
       )
       .subscribe((status) => {

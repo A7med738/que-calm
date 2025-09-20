@@ -55,7 +55,7 @@ const PatientDashboard = () => {
   // Redirect if not logged in
   useEffect(() => {
     if (!user && !authLoading) {
-      navigate("/patient/login");
+      navigate("/");
     }
   }, [user, authLoading, navigate]);
 

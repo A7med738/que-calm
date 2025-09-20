@@ -42,6 +42,8 @@ export const useClinicBookings = (medicalCenterId: string) => {
       // Get today's date
       const today = new Date().toISOString().split('T')[0];
 
+      console.log('Fetching bookings for medical center:', medicalCenterId, 'on date:', today);
+
       const { data, error } = await supabase
         .from('bookings')
         .select(`
@@ -49,10 +51,12 @@ export const useClinicBookings = (medicalCenterId: string) => {
           services!inner(
             name,
             price,
-            doctor_name
+            doctor_name,
+            doctor_specialty
           ),
           doctors(
-            name
+            name,
+            specialty
           )
         `)
         .eq('medical_center_id', medicalCenterId)
@@ -60,7 +64,12 @@ export const useClinicBookings = (medicalCenterId: string) => {
         .in('status', ['pending', 'confirmed', 'in_progress'])
         .order('queue_number', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching bookings:', error);
+        throw error;
+      }
+
+      console.log('Fetched bookings:', data?.length || 0, 'bookings');
 
       // Get patient details using RPC function
       const patientIds = data.map(booking => booking.patient_id);
@@ -85,6 +94,7 @@ export const useClinicBookings = (medicalCenterId: string) => {
         };
       });
 
+      console.log('Transformed bookings data:', transformedBookings);
       setBookings(transformedBookings);
       setLastUpdateTime(new Date());
     } catch (err) {

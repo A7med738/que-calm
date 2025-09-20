@@ -352,9 +352,38 @@ const ClinicDashboard = () => {
           {selectedTab === "queue" && (
             <div className="space-y-4 sm:space-y-6">
 
+              {/* Refresh Button */}
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold">طوابير الأطباء</h2>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    refetchDoctorQueues();
+                    refetch();
+                  }}
+                  disabled={doctorQueuesLoading || bookingsLoading}
+                  className="flex items-center gap-2"
+                >
+                  <RefreshCw className={`h-4 w-4 ${(doctorQueuesLoading || bookingsLoading) ? 'animate-spin' : ''}`} />
+                  تحديث
+                </Button>
+              </div>
+
               {/* Doctor Queues Overview */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                {doctorQueues.map((doctorQueue) => (
+                {doctorQueuesLoading ? (
+                  <div className="col-span-full text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                    <p className="text-sm text-muted-foreground mt-2">جاري تحميل طوابير الأطباء...</p>
+                  </div>
+                ) : doctorQueues.length === 0 ? (
+                  <div className="col-span-full text-center py-8">
+                    <Stethoscope className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">لا يوجد أطباء نشطين</p>
+                  </div>
+                ) : (
+                  doctorQueues.map((doctorQueue) => (
                   <Card 
                     key={doctorQueue.doctor_id}
                     className={`cursor-pointer transition-all hover:shadow-md ${
@@ -391,7 +420,8 @@ const ClinicDashboard = () => {
                       )}
                     </CardContent>
                   </Card>
-                ))}
+                  ))
+                )}
               </div>
 
               {/* Selected Doctor Queue Details */}

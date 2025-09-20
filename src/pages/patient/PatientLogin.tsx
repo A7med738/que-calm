@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { ArrowRight, Users, Mail, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 
 const PatientLogin = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -19,13 +20,23 @@ const PatientLogin = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, signUp, signIn, loading } = useAuth();
+  const { isAdmin, isClinicAdmin, isPatient, loading: roleLoading } = useUserRole();
 
-  // Redirect if already logged in
+  // Smart redirect based on user role
   useEffect(() => {
-    if (user && !loading) {
-      navigate("/patient/dashboard");
+    if (user && !loading && !roleLoading) {
+      if (isAdmin()) {
+        navigate("/admin/dashboard", { replace: true });
+      } else if (isClinicAdmin()) {
+        navigate("/clinic/dashboard", { replace: true });
+      } else if (isPatient()) {
+        navigate("/patient/dashboard", { replace: true });
+      } else {
+        // Default to patient dashboard if no specific role
+        navigate("/patient/dashboard", { replace: true });
+      }
     }
-  }, [user, loading, navigate]);
+  }, [user, loading, roleLoading, isAdmin, isClinicAdmin, isPatient, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,7 +59,7 @@ const PatientLogin = () => {
             title: "تم تسجيل الدخول بنجاح",
             description: "مرحباً بك في نظام نخبة الطب",
           });
-          navigate("/patient/dashboard");
+          // سيتم التوجيه تلقائياً بواسطة useEffect
         }
       } else {
         if (!name.trim()) {

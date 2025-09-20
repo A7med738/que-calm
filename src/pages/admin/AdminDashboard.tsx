@@ -94,8 +94,8 @@ const AdminDashboard = () => {
   // Add a delay to prevent premature redirect
   useEffect(() => {
     if (!user && !authLoading) {
-      console.log('No user found, redirecting to login');
-      navigate("/patient/login");
+      console.log('No user found, redirecting to home');
+      navigate("/");
     }
   }, [user, authLoading, navigate]);
 
