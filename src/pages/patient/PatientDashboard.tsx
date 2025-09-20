@@ -655,15 +655,31 @@ const PatientDashboard = () => {
             </div>
           ) : bookings.length > 0 ? (
             <div className="space-y-4 sm:space-y-6">
-              {bookings.map((booking) => (
-                <Card key={booking.id} className="hover:shadow-lg transition-all duration-300">
+              {bookings.map((booking) => {
+                const isNext = booking.waiting_count === 0 && booking.status === 'pending';
+                const isCurrent = booking.waiting_count === 0 && booking.status === 'in_progress';
+                
+                return (
+                <Card 
+                  key={booking.id} 
+                  className={`hover:shadow-lg transition-all duration-300 ${
+                    isNext ? 'bg-green-50 border-2 border-green-300 shadow-green-200' : 
+                    isCurrent ? 'bg-blue-50 border-2 border-blue-300 shadow-blue-200' : ''
+                  }`}
+                >
                   <CardContent className="p-4 sm:p-6">
                     <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
                       <div className="flex-1">
                         <div className="flex flex-col sm:flex-row items-start justify-between mb-4 gap-3">
                           <div className="flex-1">
-                            <h3 className="text-lg sm:text-xl font-semibold text-card-foreground mb-2">
+                            <h3 className={`text-lg sm:text-xl font-semibold mb-2 ${
+                              isNext ? 'text-green-700' : 
+                              isCurrent ? 'text-blue-700' : 
+                              'text-card-foreground'
+                            }`}>
                               {booking.medical_center_name}
+                              {isNext && <span className="ml-2 text-sm">🟢</span>}
+                              {isCurrent && <span className="ml-2 text-sm">🔵</span>}
                             </h3>
                             <div className="space-y-2 text-sm sm:text-base text-muted-foreground">
                               <div className="flex items-center gap-2">
@@ -694,11 +710,28 @@ const PatientDashboard = () => {
                               <div className="flex items-center gap-2">
                                 <Clock className="h-4 w-4" />
                                 <span>رقم الدور: {booking.queue_number}</span>
-                                {booking.waiting_count !== null && booking.waiting_count > 0 && (
-                                  <span className="text-orange-600">({booking.waiting_count} منتظرين)</span>
-                                )}
                               </div>
-                            </div>
+                              {booking.waiting_count !== null && booking.waiting_count > 0 && (
+                                <div className="flex items-center gap-2">
+                                  <Users className="h-4 w-4 text-blue-500" />
+                                  <span className="text-blue-600 font-medium">
+                                    متبقي: {booking.waiting_count} دور
+                                  </span>
+                                </div>
+                              )}
+                              {booking.waiting_count === 0 && booking.status === 'in_progress' && (
+                                <div className="flex items-center gap-2 bg-blue-100 px-3 py-2 rounded-lg border border-blue-200">
+                                  <CheckCircle className="h-4 w-4 text-blue-600" />
+                                  <span className="text-blue-700 font-bold">دورك الآن - ادخل للفحص!</span>
+                                </div>
+                              )}
+                              {booking.waiting_count === 0 && booking.status === 'pending' && (
+                                <div className="flex items-center gap-2 bg-green-100 px-3 py-2 rounded-lg border border-green-200">
+                                  <Clock className="h-4 w-4 text-green-600" />
+                                  <span className="text-green-700 font-bold">أنت التالي - استعد للدخول!</span>
+          </div>
+        )}
+      </div>
                           </div>
                           <div className="flex flex-col items-end gap-2">
                             <Badge className={getStatusColor(booking.status)}>
@@ -780,7 +813,8 @@ const PatientDashboard = () => {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-12">

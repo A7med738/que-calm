@@ -130,16 +130,32 @@ const CenterDetails = () => {
                             <span className="text-xl sm:text-2xl font-bold text-primary">{service.price} جنيه</span>
                             <div className="flex items-center gap-1">
                               <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
-                              <span>{service.waiting_count || 0} منتظرين</span>
+                              <span className="font-medium">
+                                {service.waiting_count || 0} منتظرين
+                              </span>
+                              {(service.waiting_count || 0) > 0 && (
+                                <span className="text-xs text-muted-foreground">
+                                  (متوقع: {(service.waiting_count || 0) * 15} دقيقة)
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
                         
                         <Badge 
-                          variant={(service.waiting_count || 0) <= 2 ? "default" : "secondary"}
-                          className={(service.waiting_count || 0) <= 2 ? "bg-accent text-accent-foreground" : ""}
+                          variant={
+                            (service.waiting_count || 0) === 0 ? "default" :
+                            (service.waiting_count || 0) <= 2 ? "secondary" : "destructive"
+                          }
+                          className={
+                            (service.waiting_count || 0) === 0 ? "bg-green-100 text-green-800" :
+                            (service.waiting_count || 0) <= 2 ? "bg-yellow-100 text-yellow-800" : 
+                            "bg-red-100 text-red-800"
+                          }
                         >
-                          {(service.waiting_count || 0) <= 2 ? "متاح الآن" : "مزدحم"}
+                          {(service.waiting_count || 0) === 0 ? "متاح فوراً" :
+                           (service.waiting_count || 0) <= 2 ? "متاح قريباً" : 
+                           (service.waiting_count || 0) <= 5 ? "مزدحم" : "مزدحم جداً"}
                         </Badge>
                       </div>
                       

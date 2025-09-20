@@ -68,16 +68,30 @@ export const useMedicalCenter = (centerId: string) => {
         throw servicesError;
       }
 
-      // Transform services data
-      const transformedServices = servicesData?.map(service => ({
-        id: service.id,
-        name: service.name,
-        description: service.description,
-        price: service.price,
-        doctor_name: service.doctor_name,
-        doctor_specialty: service.doctor_specialty,
-        waiting_count: Math.floor(Math.random() * 10) + 1 // Mock waiting count for now
-      })) || [];
+      // Transform services data with real waiting count
+      const transformedServices = await Promise.all(
+        (servicesData || []).map(async (service) => {
+          // Get real waiting count for this service
+          const today = new Date().toISOString().split('T')[0];
+          const { count: waitingCount } = await supabase
+            .from('bookings')
+            .select('*', { count: 'exact', head: true })
+            .eq('medical_center_id', centerId)
+            .eq('service_id', service.id)
+            .eq('booking_date', today)
+            .in('status', ['pending', 'confirmed', 'in_progress']);
+
+          return {
+            id: service.id,
+            name: service.name,
+            description: service.description,
+            price: service.price,
+            doctor_name: service.doctor_name,
+            doctor_specialty: service.doctor_specialty,
+            waiting_count: waitingCount || 0
+          };
+        })
+      );
 
       setServices(transformedServices);
 

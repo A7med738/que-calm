@@ -50,7 +50,49 @@ export const useBookings = () => {
         throw error;
       }
 
-      setBookings(data || []);
+      // Calculate waiting count for each booking
+      const bookingsWithWaitingCount = await Promise.all(
+        (data || []).map(async (booking) => {
+          if (booking.status === 'completed' || booking.status === 'cancelled') {
+            return { ...booking, waiting_count: 0 };
+          }
+
+          // Get current queue number for the medical center today
+          const today = new Date().toISOString().split('T')[0];
+          const { data: currentQueueData } = await supabase
+            .from('bookings')
+            .select('queue_number')
+            .eq('medical_center_id', booking.medical_center_id)
+            .eq('booking_date', today)
+            .eq('status', 'in_progress')
+            .order('queue_number', { ascending: true })
+            .limit(1)
+            .single();
+
+          const currentQueueNumber = currentQueueData?.queue_number || 0;
+          
+          // If no current patient, count all patients with lower queue numbers
+          let waitingCount = 0;
+          if (currentQueueNumber > 0) {
+            waitingCount = Math.max(0, booking.queue_number - currentQueueNumber);
+          } else {
+            // Count patients with lower queue numbers
+            const { count } = await supabase
+              .from('bookings')
+              .select('*', { count: 'exact', head: true })
+              .eq('medical_center_id', booking.medical_center_id)
+              .eq('booking_date', today)
+              .lt('queue_number', booking.queue_number)
+              .in('status', ['pending', 'confirmed', 'in_progress']);
+            
+            waitingCount = count || 0;
+          }
+
+          return { ...booking, waiting_count: waitingCount };
+        })
+      );
+
+      setBookings(bookingsWithWaitingCount);
     } catch (err) {
       console.error('Error fetching bookings:', err);
       setError(err instanceof Error ? err.message : 'حدث خطأ في جلب الحجوزات');
