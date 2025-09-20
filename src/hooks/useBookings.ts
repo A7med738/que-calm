@@ -192,6 +192,25 @@ export const useBookings = () => {
       const bookingDate = today.toISOString().split('T')[0];
       const bookingTime = today.toTimeString().split(' ')[0].substring(0, 5);
 
+      // Check for existing active bookings for the same date
+      const { data: existingBookings, error: existingBookingsError } = await supabase
+        .from('bookings')
+        .select(`
+          id,
+          status,
+          services!inner(
+            doctor_name
+          )
+        `)
+        .eq('patient_id', user.id)
+        .eq('booking_date', bookingDate)
+        .in('status', ['pending', 'confirmed', 'in_progress']);
+
+      if (existingBookingsError) {
+        console.error('Error checking existing bookings:', existingBookingsError);
+        throw new Error('خطأ في فحص الحجوزات الموجودة');
+      }
+
       // Get service details to find the doctor
       const { data: serviceData, error: serviceError } = await supabase
         .from('services')
@@ -202,6 +221,25 @@ export const useBookings = () => {
       if (serviceError) {
         console.error('Error fetching service details:', serviceError);
         throw new Error('خطأ في جلب تفاصيل الخدمة');
+      }
+
+      // Check if user already has a booking with a different doctor
+      if (existingBookings && existingBookings.length > 0) {
+        const currentDoctorName = serviceData.doctor_name;
+        const existingDoctorNames = existingBookings.map(booking => booking.services?.doctor_name).filter(Boolean);
+        
+        // Check if there's a booking with a different doctor
+        const hasDifferentDoctor = existingDoctorNames.some(doctorName => doctorName !== currentDoctorName);
+        
+        if (hasDifferentDoctor) {
+          throw new Error('لا يمكنك الحجز لدى أكثر من دكتور في نفس اليوم. يرجى إلغاء الحجز السابق أولاً أو الحجز لدى نفس الدكتور.');
+        }
+        
+        // Check if there's already a booking with the same doctor (allow multiple bookings with same doctor)
+        const hasSameDoctor = existingDoctorNames.some(doctorName => doctorName === currentDoctorName);
+        if (hasSameDoctor) {
+          console.log('User already has a booking with the same doctor, allowing multiple bookings');
+        }
       }
 
       // Find or create doctor for this service

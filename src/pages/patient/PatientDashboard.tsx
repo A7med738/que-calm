@@ -24,7 +24,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Search, MapPin, Star, Users, Building2, Plus, User, Calendar, Heart, Clock, X, CheckCircle, Trash2, Shield } from "lucide-react";
+import { Search, MapPin, Star, Users, Building2, Plus, User, Calendar, Heart, Clock, X, CheckCircle, Trash2, Shield, Eye } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useBookings } from "@/hooks/useBookings";
@@ -192,6 +192,14 @@ const PatientDashboard = () => {
         return 'bg-orange-100 text-orange-800';
       default:
         return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getWaitingCountColor = (waitingCount: number) => {
+    if (waitingCount <= 3) {
+      return 'text-green-600 bg-green-50 border-green-200';
+    } else {
+      return 'text-yellow-600 bg-yellow-50 border-yellow-200';
     }
   };
 
@@ -672,50 +680,70 @@ const PatientDashboard = () => {
                     isCurrent ? 'bg-blue-50 border-2 border-blue-300 shadow-blue-200' : ''
                   }`}
                 >
-                  <CardContent className="p-4 sm:p-6">
-                    <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex flex-col sm:flex-row items-start justify-between mb-4 gap-3">
-                          <div className="flex-1">
-                            <h3 className={`text-lg sm:text-xl font-semibold mb-2 ${
+                  <CardContent className="p-3 sm:p-4 md:p-6">
+                    <div className="space-y-3">
+                      <div className="w-full">
+                        <div className="mb-4">
+                          {/* العنوان ورقم الأدوار في صف واحد للهاتف */}
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className={`text-base sm:text-lg font-semibold flex-1 pr-2 ${
                               isNext ? 'text-green-700' : 
                               isCurrent ? 'text-blue-700' : 
                               'text-card-foreground'
                             }`}>
                               {booking.medical_center_name}
-                              {isNext && <span className="ml-2 text-sm">🟢</span>}
-                              {isCurrent && <span className="ml-2 text-sm">🔵</span>}
+                              {isNext && <span className="ml-1 text-xs">🟢</span>}
+                              {isCurrent && <span className="ml-1 text-xs">🔵</span>}
                             </h3>
-                            <div className="space-y-2 text-sm sm:text-base text-muted-foreground">
-                              <div className="flex items-center gap-2">
-                                <Calendar className="h-4 w-4" />
-                                <span>{new Date(booking.booking_date).toLocaleDateString('ar-EG')} - {booking.booking_time}</span>
+                            
+                            {/* رقم الأدوار المتبقية الكبير - محسن للهاتف */}
+                            {booking.waiting_count !== null && booking.waiting_count > 0 && (
+                              <div className={`text-2xl sm:text-3xl md:text-4xl font-bold px-2 sm:px-3 py-1 sm:py-2 rounded-lg border-2 ${getWaitingCountColor(booking.waiting_count)} min-w-[50px] text-center`}>
+                                {booking.waiting_count}
                               </div>
-                              <div className="flex items-center gap-2">
-                                <Building2 className="h-4 w-4" />
-                                <span>{booking.service_name}</span>
-                                <span className="text-primary font-medium">{booking.service_price} جنيه</span>
+                            )}
+                            {booking.waiting_count === 0 && booking.status === 'in_progress' && (
+                              <div className="text-lg sm:text-xl md:text-2xl font-bold px-2 sm:px-3 py-1 sm:py-2 rounded-lg border-2 text-green-600 bg-green-50 border-green-200 min-w-[50px] text-center">
+                                الآن
                               </div>
-                              {booking.doctor_name && (
-                                <div className="flex items-center gap-2">
-                                  <User className="h-4 w-4" />
-                                  <span>{booking.doctor_name}</span>
-                                </div>
-                              )}
-                              {booking.family_member_name && (
-                                <div className="flex items-center gap-2">
-                                  <Users className="h-4 w-4" />
-                                  <span>لـ {booking.family_member_name}</span>
-                                </div>
-                              )}
-                              <div className="flex items-center gap-2">
-                                <MapPin className="h-4 w-4" />
-                                <span>{booking.medical_center_address}</span>
+                            )}
+                            {booking.waiting_count === 0 && booking.status === 'pending' && (
+                              <div className="text-lg sm:text-xl md:text-2xl font-bold px-2 sm:px-3 py-1 sm:py-2 rounded-lg border-2 text-blue-600 bg-blue-50 border-blue-200 min-w-[50px] text-center">
+                                التالي
                               </div>
+                            )}
+                          </div>
+                          {/* تفاصيل الحجز - محسنة للهاتف */}
+                          <div className="space-y-2 text-xs sm:text-sm text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                              <span className="truncate">{new Date(booking.booking_date).toLocaleDateString('ar-EG')} - {booking.booking_time}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Building2 className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                              <span className="truncate">{booking.service_name}</span>
+                              <span className="text-primary font-medium whitespace-nowrap">{booking.service_price} جنيه</span>
+                            </div>
+                            {booking.doctor_name && (
                               <div className="flex items-center gap-2">
-                                <Clock className="h-4 w-4" />
-                                <span>رقم الدور: {booking.queue_number}</span>
+                                <User className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                                <span className="truncate">{booking.doctor_name}</span>
                               </div>
+                            )}
+                            {booking.family_member_name && (
+                              <div className="flex items-center gap-2">
+                                <Users className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                                <span className="truncate">لـ {booking.family_member_name}</span>
+                              </div>
+                            )}
+                            <div className="flex items-start gap-2">
+                              <MapPin className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0 mt-0.5" />
+                              <span className="text-xs sm:text-sm leading-relaxed">{booking.medical_center_address}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                              <span>رقم الدور: {booking.queue_number}</span>
+                            </div>
                               {booking.waiting_count !== null && booking.waiting_count > 0 && (
                                 <div className="flex items-center gap-2">
                                   <Users className="h-4 w-4 text-blue-500" />
@@ -725,25 +753,26 @@ const PatientDashboard = () => {
                                 </div>
                               )}
                               {booking.waiting_count === 0 && booking.status === 'in_progress' && (
-                                <div className="flex items-center gap-2 bg-blue-100 px-3 py-2 rounded-lg border border-blue-200">
-                                  <CheckCircle className="h-4 w-4 text-blue-600" />
-                                  <span className="text-blue-700 font-bold">دورك الآن - ادخل للفحص!</span>
+                                <div className="flex items-center gap-2 bg-blue-100 px-2 sm:px-3 py-1 sm:py-2 rounded-lg border border-blue-200 mt-2">
+                                  <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600 flex-shrink-0" />
+                                  <span className="text-blue-700 font-bold text-xs sm:text-sm">دورك الآن - ادخل للفحص!</span>
                                 </div>
                               )}
                               {booking.waiting_count === 0 && booking.status === 'pending' && (
-                                <div className="flex items-center gap-2 bg-green-100 px-3 py-2 rounded-lg border border-green-200">
-                                  <Clock className="h-4 w-4 text-green-600" />
-                                  <span className="text-green-700 font-bold">أنت التالي - استعد للدخول!</span>
-          </div>
-        )}
+                                <div className="flex items-center gap-2 bg-green-100 px-2 sm:px-3 py-1 sm:py-2 rounded-lg border border-green-200 mt-2">
+                                  <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-green-600 flex-shrink-0" />
+                                  <span className="text-green-700 font-bold text-xs sm:text-sm">أنت التالي - استعد للدخول!</span>
+                                </div>
+                              )}
       </div>
                           </div>
-                          <div className="flex flex-col items-end gap-2">
-                            <Badge className={getStatusColor(booking.status)}>
+                          {/* حالة الحجز - محسنة للهاتف */}
+                          <div className="flex flex-wrap items-center gap-2 mt-2">
+                            <Badge className={`${getStatusColor(booking.status)} text-xs`}>
                               {getStatusText(booking.status)}
                             </Badge>
                             {booking.queue_status === 'called' && (
-                              <Badge className="bg-green-100 text-green-800">
+                              <Badge className="bg-green-100 text-green-800 text-xs">
                                 <CheckCircle className="h-3 w-3 mr-1" />
                                 تم الاستدعاء
                               </Badge>
@@ -751,48 +780,51 @@ const PatientDashboard = () => {
                           </div>
                         </div>
                         
-                        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
+                        {/* أزرار الإجراءات - محسنة للهاتف */}
+                        <div className="flex flex-wrap gap-2 mt-4">
+                          {/* زر الإلغاء (X) */}
                           {booking.status === 'pending' || booking.status === 'confirmed' ? (
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => handleCancelBooking(booking.id)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0 flex-shrink-0"
                             >
-                              <X className="h-4 w-4 mr-2" />
-                              إلغاء الحجز
+                              <X className="h-4 w-4" />
                             </Button>
                           ) : null}
                           
+                          {/* زر عرض التفاصيل (العين) */}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => navigate(`/patient/center/${booking.medical_center_id}`)}
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-8 w-8 p-0 flex-shrink-0"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          
+                          {/* زر متابعة الطابور */}
                           {booking.status === 'confirmed' && booking.qr_code && (
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => navigate(`/patient/queue/${booking.id}`)}
+                              className="text-green-600 hover:text-green-700 hover:bg-green-50 h-8 w-8 p-0 flex-shrink-0"
                             >
-                              <Calendar className="h-4 w-4 mr-2" />
-                              متابعة الطابور
+                              <Calendar className="h-4 w-4" />
                             </Button>
                           )}
                           
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => navigate(`/patient/center/${booking.medical_center_id}`)}
-                          >
-                            <Building2 className="h-4 w-4 mr-2" />
-                            عرض المركز
-                          </Button>
-                          
+                          {/* زر الحذف النهائي (القمامة) */}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0 flex-shrink-0"
                               >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                حذف نهائي
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
@@ -815,9 +847,8 @@ const PatientDashboard = () => {
                           </AlertDialog>
                         </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
                 );
               })}
             </div>
