@@ -189,10 +189,58 @@ export const useBookings = () => {
       const bookingDate = today.toISOString().split('T')[0];
       const bookingTime = today.toTimeString().split(' ')[0].substring(0, 5);
 
-      // Get next queue number for today
+      // Get service details to find the doctor
+      const { data: serviceData, error: serviceError } = await supabase
+        .from('services')
+        .select('doctor_name, doctor_specialty')
+        .eq('id', bookingData.service_id)
+        .single();
+
+      if (serviceError) {
+        console.error('Error fetching service details:', serviceError);
+        throw new Error('خطأ في جلب تفاصيل الخدمة');
+      }
+
+      // Find or create doctor for this service
+      let doctorId = null;
+      if (serviceData.doctor_name) {
+        // First, try to find existing doctor
+        const { data: existingDoctor } = await supabase
+          .from('doctors')
+          .select('id')
+          .eq('medical_center_id', bookingData.medical_center_id)
+          .eq('name', serviceData.doctor_name)
+          .single();
+
+        if (existingDoctor) {
+          doctorId = existingDoctor.id;
+        } else {
+          // Create new doctor if not exists
+          const { data: newDoctor, error: doctorError } = await supabase
+            .from('doctors')
+            .insert({
+              medical_center_id: bookingData.medical_center_id,
+              name: serviceData.doctor_name,
+              specialty: serviceData.doctor_specialty || 'عام',
+              status: 'active'
+            })
+            .select()
+            .single();
+
+          if (doctorError) {
+            console.error('Error creating doctor:', doctorError);
+            // Continue without doctor_id if creation fails
+          } else {
+            doctorId = newDoctor.id;
+          }
+        }
+      }
+
+      // Get next queue number for the specific doctor (or general if no doctor)
       const { data: nextQueueNumber } = await supabase
-        .rpc('get_next_queue_number', {
+        .rpc('get_next_doctor_queue_number', {
           p_medical_center_id: bookingData.medical_center_id,
+          p_doctor_id: doctorId,
           p_booking_date: bookingDate
         });
 
@@ -200,23 +248,36 @@ export const useBookings = () => {
       const { data: qrCode } = await supabase
         .rpc('generate_booking_qr_code');
 
-        // Create booking
-        const { data: booking, error } = await supabase
-          .from('bookings')
-          .insert({
-            patient_id: user.id,
-            medical_center_id: bookingData.medical_center_id,
-            service_id: bookingData.service_id,
-            doctor_id: null,
-            booking_date: bookingDate,
-            booking_time: bookingTime,
-            queue_number: nextQueueNumber || 1,
-            qr_code: qrCode,
-            status: 'pending',
-            notes: bookingData.notes
-          })
-          .select()
-          .single();
+      console.log('Creating booking with data:', {
+        patient_id: user.id,
+        medical_center_id: bookingData.medical_center_id,
+        service_id: bookingData.service_id,
+        doctor_id: doctorId,
+        booking_date: bookingDate,
+        booking_time: bookingTime,
+        queue_number: nextQueueNumber || 1,
+        qr_code: qrCode,
+        status: 'pending',
+        notes: bookingData.notes
+      });
+
+      // Create booking
+      const { data: booking, error } = await supabase
+        .from('bookings')
+        .insert({
+          patient_id: user.id,
+          medical_center_id: bookingData.medical_center_id,
+          service_id: bookingData.service_id,
+          doctor_id: doctorId,
+          booking_date: bookingDate,
+          booking_time: bookingTime,
+          queue_number: nextQueueNumber || 1,
+          qr_code: qrCode,
+          status: 'pending',
+          notes: bookingData.notes
+        })
+        .select()
+        .single();
 
       if (error) {
         throw error;

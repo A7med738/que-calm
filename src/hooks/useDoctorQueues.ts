@@ -55,6 +55,8 @@ export const useDoctorQueues = (medicalCenterId: string) => {
           p_booking_date: today
         });
 
+      console.log('Main function result:', { data: data?.length || 0, error });
+
       // If no data or error, try fallback function
       if (!data || data.length === 0 || error) {
         console.log('Trying fallback function for doctor queues...');
@@ -63,6 +65,8 @@ export const useDoctorQueues = (medicalCenterId: string) => {
             p_medical_center_id: medicalCenterId,
             p_booking_date: today
           });
+        
+        console.log('Fallback function result:', { data: fallbackResult.data?.length || 0, error: fallbackResult.error });
         
         if (fallbackResult.data && fallbackResult.data.length > 0) {
           data = fallbackResult.data;
@@ -92,6 +96,8 @@ export const useDoctorQueues = (medicalCenterId: string) => {
     try {
       const today = new Date().toISOString().split('T')[0];
 
+      console.log('Fetching patients for doctor:', doctorId, 'in medical center:', medicalCenterId, 'on date:', today);
+
       // Get patients in this doctor's queue (try fallback if main function fails)
       let { data, error } = await supabase
         .rpc('get_doctor_queue_patients', {
@@ -99,6 +105,8 @@ export const useDoctorQueues = (medicalCenterId: string) => {
           p_doctor_id: doctorId,
           p_booking_date: today
         });
+
+      console.log('Main function result for patients:', { data: data?.length || 0, error });
 
       // If no data or error, try fallback function
       if (!data || data.length === 0 || error) {
@@ -112,6 +120,8 @@ export const useDoctorQueues = (medicalCenterId: string) => {
               p_doctor_name: doctorQueue.doctor_name,
               p_booking_date: today
             });
+          
+          console.log('Fallback function result for patients:', { data: fallbackResult.data?.length || 0, error: fallbackResult.error });
           
           if (fallbackResult.data && fallbackResult.data.length > 0) {
             data = fallbackResult.data;
