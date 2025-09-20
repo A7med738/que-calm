@@ -150,9 +150,7 @@ const AdminDashboard = () => {
         phone: editingCenter.phone,
         email: editingCenter.email,
         hours: editingCenter.hours,
-        description: editingCenter.description,
-        admin_email: "",
-        admin_password: ""
+        description: editingCenter.description
       });
 
       toast({
@@ -511,6 +509,103 @@ const AdminDashboard = () => {
           </div>
         )}
       </div>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>تعديل المركز الطبي</DialogTitle>
+            <DialogDescription>
+              قم بتعديل بيانات المركز الطبي
+            </DialogDescription>
+          </DialogHeader>
+          
+          {editingCenter && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">اسم المركز الطبي *</Label>
+                <Input
+                  id="edit-name"
+                  value={editingCenter.name}
+                  onChange={(e) => setEditingCenter({...editingCenter, name: e.target.value})}
+                  placeholder="أدخل اسم المركز"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="edit-specialty">التخصص *</Label>
+                <Input
+                  id="edit-specialty"
+                  value={editingCenter.specialty}
+                  onChange={(e) => setEditingCenter({...editingCenter, specialty: e.target.value})}
+                  placeholder="أدخل التخصص"
+                />
+              </div>
+              
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="edit-address">العنوان *</Label>
+                <Input
+                  id="edit-address"
+                  value={editingCenter.address}
+                  onChange={(e) => setEditingCenter({...editingCenter, address: e.target.value})}
+                  placeholder="أدخل العنوان"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="edit-phone">رقم الهاتف *</Label>
+                <Input
+                  id="edit-phone"
+                  value={editingCenter.phone}
+                  onChange={(e) => setEditingCenter({...editingCenter, phone: e.target.value})}
+                  placeholder="02-xxxx-xxxx"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="edit-email">البريد الإلكتروني</Label>
+                <Input
+                  id="edit-email"
+                  type="email"
+                  value={editingCenter.email}
+                  onChange={(e) => setEditingCenter({...editingCenter, email: e.target.value})}
+                  placeholder="center@example.com"
+                />
+              </div>
+              
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="edit-hours">ساعات العمل *</Label>
+                <Input
+                  id="edit-hours"
+                  value={editingCenter.hours}
+                  onChange={(e) => setEditingCenter({...editingCenter, hours: e.target.value})}
+                  placeholder="الأحد - الخميس: 9:00 ص - 9:00 م"
+                />
+              </div>
+              
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="edit-description">الوصف</Label>
+                <Textarea
+                  id="edit-description"
+                  value={editingCenter.description}
+                  onChange={(e) => setEditingCenter({...editingCenter, description: e.target.value})}
+                  placeholder="أدخل وصف المركز الطبي"
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              إلغاء
+            </Button>
+            <Button onClick={handleEditCenter}>
+              حفظ التغييرات
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

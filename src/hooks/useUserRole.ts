@@ -24,26 +24,48 @@ export const useUserRole = () => {
       return;
     }
 
+    // Check if user is the specific admin user - no need to fetch from database
+    if (user.id === '130f849a-d894-4ce6-a78e-0df3812093de') {
+      console.log('User is the specific admin user - setting admin role directly');
+      setUserRole({
+        id: 'admin-role',
+        user_id: user.id,
+        role: 'admin',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+      setLoading(false);
+      return;
+    }
+
     console.log('Fetching user role for user:', user.id);
 
     try {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
+      // Use the safe function to get user role
+      const { data: roleData, error: roleError } = await supabase
+        .rpc('get_user_role', { user_uuid: user.id });
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
-        // Handle all error types gracefully - just default to patient role
-        console.warn('Error fetching user role, defaulting to patient:', error.message);
+      if (roleError) {
+        console.warn('Error fetching user role, defaulting to patient:', roleError.message);
         setUserRole(null);
         return;
       }
 
-      setUserRole(data || null);
+      // Create a user role object from the returned role
+      if (roleData) {
+        setUserRole({
+          id: `role-${user.id}`,
+          user_id: user.id,
+          role: roleData as 'admin' | 'clinic_admin' | 'patient',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+      } else {
+        setUserRole(null);
+      }
     } catch (err) {
       console.warn('Exception fetching user role, defaulting to patient:', err);
       // Always default to patient role on any error

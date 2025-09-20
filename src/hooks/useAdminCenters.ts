@@ -121,14 +121,20 @@ export const useAdminCenters = () => {
     try {
       setError(null);
 
-      const { error } = await supabase
+      console.log('Updating medical center:', centerId, updates);
+
+      const { data, error } = await supabase
         .from('medical_centers')
         .update(updates)
-        .eq('id', centerId);
+        .eq('id', centerId)
+        .select();
 
       if (error) {
+        console.error('Supabase error:', error);
         throw error;
       }
+
+      console.log('Update successful:', data);
 
       // Refresh the centers list
       await fetchCenters();
@@ -146,15 +152,18 @@ export const useAdminCenters = () => {
     try {
       setError(null);
 
-      // Simple delete - the foreign key constraints should handle cascading now
-      const { error } = await supabase
-        .from('medical_centers')
-        .delete()
-        .eq('id', centerId);
+      console.log('Deleting medical center:', centerId);
+
+      // Use the safe delete function to handle audit logging properly
+      const { data, error } = await supabase
+        .rpc('safe_delete_medical_center', { center_id: centerId });
 
       if (error) {
+        console.error('Supabase error:', error);
         throw error;
       }
+
+      console.log('Delete successful:', data);
 
       // Update local state immediately
       setCenters(prevCenters => 
