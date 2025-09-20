@@ -42,6 +42,7 @@ const ClinicDashboard = () => {
   const [loadingDoctorQueuePatients, setLoadingDoctorQueuePatients] = useState(false);
   const navigate = useNavigate();
   
+  
   // Get notifications for the current user (medical center owner)
   const { notifications, getUnreadCount, markAsRead, markAllAsRead } = useNotifications();
   
@@ -208,6 +209,7 @@ const ClinicDashboard = () => {
     }
   };
 
+
   const handleViewPatientDetails = async (booking: any) => {
     setSelectedPatient(booking);
     setLoadingPatientDetails(true);
@@ -349,6 +351,7 @@ const ClinicDashboard = () => {
         <div className="flex-1 p-4 sm:p-6">
           {selectedTab === "queue" && (
             <div className="space-y-4 sm:space-y-6">
+
               {/* Doctor Queues Overview */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {doctorQueues.map((doctorQueue) => (

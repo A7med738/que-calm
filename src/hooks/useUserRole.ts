@@ -95,16 +95,10 @@ export const useUserRole = () => {
     }
   };
 
-  const isAdmin = async () => {
+  const isAdmin = () => {
     if (!user) return false;
     
-    // Use secure method to check admin status
-    const isAdminUser = await checkAdminUser(user.id);
-    if (isAdminUser) {
-      console.log('User is admin');
-      return true;
-    }
-    
+    // Check if user role is admin
     console.log('User role from database:', userRole?.role);
     return userRole?.role === 'admin';
   };
@@ -117,11 +111,9 @@ export const useUserRole = () => {
     return userRole?.role === 'patient' || !userRole; // Default to patient if no role
   };
 
-  const hasRole = async (role: 'admin' | 'clinic_admin' | 'patient') => {
+  const hasRole = (role: 'admin' | 'clinic_admin' | 'patient') => {
     if (role === 'admin') {
-      if (!user) return false;
-      const isAdminUser = await checkAdminUser(user.id);
-      return isAdminUser;
+      return isAdmin();
     }
     return userRole?.role === role;
   };
