@@ -2,87 +2,119 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
+/* تعريف النظام التصميمي للتطبيق - جميع الألوان والخطوط والمتغيرات يجب تعريفها هنا
+جميع الألوان يجب أن تكون بصيغة HSL
 */
 
 @layer base {
   :root {
+    /* الخلفيات الأساسية */
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background-secondary: 220 14% 96%;
+    --foreground: 220 39% 11%;
 
+    /* البطاقات والعناصر */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 220 39% 11%;
 
+    /* النوافذ المنبثقة */
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 220 39% 11%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* اللون الرئيسي - أزرق هادئ */
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 98%;
+    --primary-hover: 217 91% 55%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* اللون الثانوي */
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 39% 11%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* الألوان المكتومة */
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* لون الإجراءات - تيل/أخضر مائل للأزرق */
+    --accent: 173 58% 39%;
+    --accent-foreground: 0 0% 98%;
+    --accent-hover: 173 58% 35%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* ألوان التحذير والخطر */
+    --warning: 45 93% 58%;
+    --warning-foreground: 26 83% 14%;
+    
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    /* الحدود والحقول */
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --input-focus: 217 91% 60%;
+    --ring: 217 91% 60%;
 
-    --radius: 0.5rem;
+    /* ظلال العناصر */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 
+    /* الانتقالات والحركات */
+    --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* نصف القطر للزوايا */
+
+    --radius: 0.75rem;
+
+    /* Sidebar colors */
     --sidebar-background: 0 0% 98%;
-
     --sidebar-foreground: 240 5.3% 26.1%;
-
     --sidebar-primary: 240 5.9% 10%;
-
     --sidebar-primary-foreground: 0 0% 98%;
-
     --sidebar-accent: 240 4.8% 95.9%;
-
     --sidebar-accent-foreground: 240 5.9% 10%;
-
     --sidebar-border: 220 13% 91%;
-
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    /* الخلفيات في الوضع المظلم */
+    --background: 220 39% 11%;
+    --background-secondary: 220 39% 15%;
+    --foreground: 0 0% 95%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 220 39% 11%;
+    --card-foreground: 0 0% 95%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 220 39% 11%;
+    --popover-foreground: 0 0% 95%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    /* الألوان الأساسية في الوضع المظلم */
+    --primary: 217 91% 70%;
+    --primary-foreground: 220 39% 11%;
+    --primary-hover: 217 91% 75%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 220 39% 15%;
+    --secondary-foreground: 0 0% 95%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 220 39% 15%;
+    --muted-foreground: 220 9% 70%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 173 58% 50%;
+    --accent-foreground: 0 0% 95%;
+    --accent-hover: 173 58% 55%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --warning: 45 93% 68%;
+    --warning-foreground: 26 83% 14%;
+    
+    --destructive: 0 84% 70%;
+    --destructive-foreground: 0 0% 95%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --border: 220 39% 20%;
+    --input: 220 39% 20%;
+    --input-focus: 217 91% 70%;
+    --ring: 217 91% 70%;
+
+    /* Sidebar colors for dark mode */
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -100,6 +132,12 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-cairo;
+    direction: rtl;
+    font-feature-settings: "kern";
+  }
+
+  html {
+    scroll-behavior: smooth;
   }
 }
