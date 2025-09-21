@@ -153,7 +153,13 @@ const ClinicDashboard = () => {
 
   // Monitor realtime connection status
   useEffect(() => {
-    setIsRealtimeConnected(hookRealtimeConnected || doctorQueuesRealtimeConnected);
+    const isConnected = hookRealtimeConnected || doctorQueuesRealtimeConnected;
+    setIsRealtimeConnected(isConnected);
+    console.log('Real-time connection status:', {
+      hookRealtimeConnected,
+      doctorQueuesRealtimeConnected,
+      isConnected
+    });
   }, [hookRealtimeConnected, doctorQueuesRealtimeConnected]);
 
   // Update last update time from hook
@@ -162,6 +168,20 @@ const ClinicDashboard = () => {
       setLastUpdateTime(hookLastUpdateTime || doctorQueuesLastUpdateTime);
     }
   }, [hookLastUpdateTime, doctorQueuesLastUpdateTime]);
+
+  // Debug doctor queues data changes
+  useEffect(() => {
+    console.log('Doctor queues data updated:', {
+      doctorQueuesCount: doctorQueues.length,
+      totalWaiting: doctorQueues.reduce((sum, queue) => sum + queue.waiting_patients, 0),
+      totalCompleted: doctorQueues.reduce((sum, queue) => sum + queue.completed_patients, 0),
+      doctorQueues: doctorQueues.map(q => ({
+        doctor: q.doctor_name,
+        waiting: q.waiting_patients,
+        completed: q.completed_patients
+      }))
+    });
+  }, [doctorQueues]);
 
   useEffect(() => {
     // تحقق من وجود جلسة المركز
@@ -667,11 +687,15 @@ const ClinicDashboard = () => {
                     <CardContent className="space-y-3">
                       <div className="grid grid-cols-2 gap-3 text-center">
                         <div>
-                          <div className="text-xl font-bold text-primary">{doctorQueue.waiting_patients}</div>
+                          <div className="text-xl font-bold text-primary transition-all duration-300 ease-in-out">
+                            {doctorQueue.waiting_patients}
+                          </div>
                           <p className="text-xs text-muted-foreground">في الانتظار</p>
                         </div>
                         <div>
-                          <div className="text-xl font-bold text-accent">{doctorQueue.completed_patients}</div>
+                          <div className="text-xl font-bold text-accent transition-all duration-300 ease-in-out">
+                            {doctorQueue.completed_patients}
+                          </div>
                           <p className="text-xs text-muted-foreground">تم فحصهم</p>
                         </div>
                       </div>
@@ -859,7 +883,7 @@ const ClinicDashboard = () => {
                 <Card>
                   <CardContent className="p-4 sm:p-6 text-center">
                     <Users className="h-6 w-6 sm:h-8 sm:w-8 text-primary mx-auto mb-2" />
-                    <div className="text-xl sm:text-2xl font-bold text-foreground">
+                    <div className="text-xl sm:text-2xl font-bold text-foreground transition-all duration-300 ease-in-out">
                       {doctorQueues.reduce((sum, queue) => sum + queue.waiting_patients, 0)}
                     </div>
                     <p className="text-muted-foreground text-sm sm:text-base">إجمالي المنتظرين</p>
@@ -868,14 +892,14 @@ const ClinicDashboard = () => {
                 <Card>
                   <CardContent className="p-4 sm:p-6 text-center">
                     <Stethoscope className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500 mx-auto mb-2" />
-                    <div className="text-xl sm:text-2xl font-bold text-foreground">{doctorQueues.length}</div>
+                    <div className="text-xl sm:text-2xl font-bold text-foreground transition-all duration-300 ease-in-out">{doctorQueues.length}</div>
                     <p className="text-muted-foreground text-sm sm:text-base">الأطباء النشطين</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4 sm:p-6 text-center">
                     <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-accent mx-auto mb-2" />
-                    <div className="text-xl sm:text-2xl font-bold text-foreground">
+                    <div className="text-xl sm:text-2xl font-bold text-foreground transition-all duration-300 ease-in-out">
                       {doctorQueues.reduce((sum, queue) => sum + queue.completed_patients, 0)}
                     </div>
                     <p className="text-muted-foreground text-sm sm:text-base">تم فحصهم اليوم</p>

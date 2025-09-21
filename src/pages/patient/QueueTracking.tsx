@@ -47,14 +47,45 @@ const QueueTracking = () => {
       
         // console.log('QueueTracking: Booking data fetched successfully:', bookingData);
       setBooking(bookingData);
-      setMyNumber(bookingData.queue_number);
 
-      // Get current queue number for the medical center today
+      // Calculate the patient's actual position in the doctor's queue
       const today = new Date().toISOString().split('T')[0];
+      
+      // Get all patients in the same doctor's queue for today
+      const { data: doctorQueueData, error: doctorQueueError } = await supabase
+        .from('bookings')
+        .select('id, queue_number, status, patient_id')
+        .eq('medical_center_id', bookingData.medical_center_id)
+        .eq('doctor_id', bookingData.doctor_id)
+        .eq('booking_date', today)
+        .in('status', ['pending', 'confirmed', 'in_progress'])
+        .order('queue_number', { ascending: true });
+
+      if (doctorQueueError) {
+        console.warn('QueueTracking: Error fetching doctor queue data:', doctorQueueError);
+        // Fallback to original queue number
+        setMyNumber(bookingData.queue_number);
+      } else {
+        // Find the patient's position in the doctor's queue
+        const patientIndex = doctorQueueData?.findIndex(booking => booking.id === bookingId);
+        const patientPosition = patientIndex + 1;
+        setMyNumber(patientPosition || bookingData.queue_number);
+        
+        console.log('Queue position calculation:', {
+          bookingId,
+          doctorQueueData: doctorQueueData?.map(b => ({ id: b.id, queue_number: b.queue_number, status: b.status })),
+          patientIndex,
+          patientPosition,
+          originalQueueNumber: bookingData.queue_number
+        });
+      }
+
+      // Get current queue number for the same doctor today
       const { data: currentQueueData, error: queueError } = await supabase
         .from('bookings')
         .select('queue_number')
         .eq('medical_center_id', bookingData.medical_center_id)
+        .eq('doctor_id', bookingData.doctor_id)
         .eq('booking_date', today)
         .eq('status', 'in_progress')
         .order('queue_number', { ascending: true })
@@ -77,7 +108,7 @@ const QueueTracking = () => {
     fetchBookingData();
     
     // Set up real-time updates
-    const interval = setInterval(fetchBookingData, 10000); // Update every 10 seconds
+    const interval = setInterval(fetchBookingData, 5000); // Update every 5 seconds
     
     return () => clearInterval(interval);
   }, [fetchBookingData]);
@@ -169,6 +200,21 @@ const QueueTracking = () => {
                 <h2 className="text-lg font-medium text-muted-foreground mb-2">دورك</h2>
                 <div className="text-6xl font-bold text-primary mb-2">{myNumber}</div>
                 <p className="text-muted-foreground">رقم دورك في الطابور</p>
+                {waitingCount > 0 && (
+                  <p className="text-sm text-blue-600 mt-2 font-medium">
+                    متبقي {waitingCount} شخص أمامك
+                  </p>
+                )}
+                {waitingCount === 0 && myNumber > 0 && currentNumber > 0 && (
+                  <p className="text-sm text-green-600 mt-2 font-medium">
+                    دورك الآن!
+                  </p>
+                )}
+                {waitingCount === 0 && myNumber > 0 && currentNumber === 0 && (
+                  <p className="text-sm text-orange-600 mt-2 font-medium">
+                    في انتظار بدء الطابور
+                  </p>
+                )}
               </CardContent>
             </Card>
 
