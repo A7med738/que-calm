@@ -51,7 +51,11 @@ const QueueTracking = () => {
       // Calculate the patient's actual position in the doctor's queue manually
       const today = new Date().toISOString().split('T')[0];
       
-      // Manual calculation to ensure accurate queue position
+      // Use the queue_number directly from the booking - it should be correct
+      // The queue_number is calculated correctly in useBookings.ts
+      setMyNumber(bookingData.queue_number);
+      
+      // Also fetch all bookings for this doctor to show waiting count
       const { data: doctorQueueData, error: doctorQueueError } = await supabase
         .from('bookings')
         .select('id, queue_number, status, patient_id, created_at')
@@ -59,16 +63,20 @@ const QueueTracking = () => {
         .eq('doctor_id', bookingData.doctor_id)
         .eq('booking_date', today)
         .in('status', ['pending', 'confirmed', 'in_progress'])
-        .order('created_at', { ascending: true });
+        .order('queue_number', { ascending: true }); // Order by queue_number, not created_at
 
       if (doctorQueueError) {
         console.warn('QueueTracking: Error fetching doctor queue data:', doctorQueueError);
-        setMyNumber(bookingData.queue_number);
       } else {
-        // Find the patient's position in the doctor's queue
+        // Find the patient's position in the doctor's queue based on queue_number
         const patientIndex = doctorQueueData?.findIndex(booking => booking.id === bookingId);
         const patientPosition = patientIndex + 1;
-        setMyNumber(patientPosition || bookingData.queue_number);
+        
+        // Double-check: if the calculated position differs from stored queue_number, update it
+        if (patientPosition !== bookingData.queue_number) {
+          console.log(`🔧 Queue number mismatch detected: stored=${bookingData.queue_number}, calculated=${patientPosition}`);
+          setMyNumber(patientPosition);
+        }
         
         console.log('🔍 Queue position calculation (manual):', {
           bookingId,
@@ -84,7 +92,9 @@ const QueueTracking = () => {
           patientIndex,
           patientPosition,
           originalQueueNumber: bookingData.queue_number,
-          totalPatientsInQueue: doctorQueueData?.length || 0
+          totalPatientsInQueue: doctorQueueData?.length || 0,
+          currentPatientQueueNumber: bookingData.queue_number,
+          isPositionCorrect: patientPosition === bookingData.queue_number
         });
       }
 
@@ -139,7 +149,7 @@ const QueueTracking = () => {
 
       const today = new Date().toISOString().split('T')[0];
       
-      // Get all bookings for this doctor today
+      // Get all bookings for this doctor today ordered by queue_number
       const { data: doctorQueueData, error: doctorQueueError } = await supabase
         .from('bookings')
         .select('id, queue_number, status, patient_id, created_at')
@@ -147,23 +157,26 @@ const QueueTracking = () => {
         .eq('doctor_id', bookingData.doctor_id)
         .eq('booking_date', today)
         .in('status', ['pending', 'confirmed', 'in_progress'])
-        .order('created_at', { ascending: true });
+        .order('queue_number', { ascending: true }); // Order by queue_number
 
       if (doctorQueueError || !doctorQueueData) return;
 
-      // Find the patient's position in the doctor's queue
+      // Find the patient's position in the doctor's queue based on queue_number order
       const patientIndex = doctorQueueData.findIndex(booking => booking.id === bookingId);
       const patientPosition = patientIndex + 1;
       
-      // Auto-fix if position is wrong
+      // Auto-fix if position is wrong (this should rarely happen now)
       if (patientPosition !== bookingData.queue_number) {
-        console.log(`Auto-fixing queue position: ${bookingData.queue_number} -> ${patientPosition}`);
+        console.log(`🔧 Auto-fixing queue position: ${bookingData.queue_number} -> ${patientPosition}`);
         await supabase
           .from('bookings')
           .update({ queue_number: patientPosition })
           .eq('id', bookingId);
         
         setMyNumber(patientPosition);
+      } else {
+        // Ensure the display shows the correct number
+        setMyNumber(bookingData.queue_number);
       }
       
     } catch (error) {
