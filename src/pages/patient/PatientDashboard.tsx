@@ -792,7 +792,7 @@ const PatientDashboard = () => {
                             </div>
                             <div className="flex items-center gap-2">
                               <Clock className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                              <span>رقم الدور: {booking.queue_number}</span>
+                              <span>رقم الدور: {booking.waiting_count !== null ? (booking.waiting_count + 1) : booking.queue_number}</span>
                             </div>
                               {booking.waiting_count !== null && booking.waiting_count > 0 && (
                                 <div className="flex items-center gap-2">

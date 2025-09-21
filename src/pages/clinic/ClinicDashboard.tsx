@@ -122,6 +122,14 @@ const ClinicDashboard = () => {
     }
   }, [clinicSession?.medical_center?.id, getCompletedCount]);
 
+  // Auto-fix queue numbers on component mount and when data changes
+  useEffect(() => {
+    if (clinicSession?.medical_center?.id && doctorQueues.length > 0) {
+      // Auto-fix queue numbers silently in background
+      handleAutoFixQueueNumbers();
+    }
+  }, [clinicSession?.medical_center?.id, doctorQueues.length]);
+
   // جلب الخدمات المتاحة للمريض اليدوي
   useEffect(() => {
     const fetchServices = async () => {
@@ -505,6 +513,71 @@ const ClinicDashboard = () => {
     navigate('/clinic/auth');
   };
 
+  // Auto-fix queue numbers function (silent, no user notifications)
+  const handleAutoFixQueueNumbers = async () => {
+    if (!clinicSession?.medical_center?.id) return;
+    
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      let needsFix = false;
+      
+      // Check each doctor's queue for issues
+      for (const doctorQueue of doctorQueues) {
+        // Get all bookings for this doctor today
+        const { data: bookings, error } = await supabase
+          .from('bookings')
+          .select('id, queue_number, created_at')
+          .eq('medical_center_id', clinicSession.medical_center.id)
+          .eq('doctor_id', doctorQueue.doctor_id)
+          .eq('booking_date', today)
+          .in('status', ['pending', 'confirmed', 'in_progress'])
+          .order('created_at', { ascending: true });
+
+        if (error) {
+          console.error('Error fetching bookings for auto-fix:', error);
+          continue;
+        }
+
+        if (bookings && bookings.length > 0) {
+          // Check if queue numbers are sequential
+          for (let i = 0; i < bookings.length; i++) {
+            const expectedQueueNumber = i + 1;
+            if (bookings[i].queue_number !== expectedQueueNumber) {
+              needsFix = true;
+              break;
+            }
+          }
+
+          // If issues found, fix them automatically
+          if (needsFix) {
+            console.log(`Auto-fixing queue for doctor ${doctorQueue.doctor_name}`);
+            
+            for (let i = 0; i < bookings.length; i++) {
+              const newQueueNumber = i + 1;
+              if (bookings[i].queue_number !== newQueueNumber) {
+                await supabase
+                  .from('bookings')
+                  .update({ queue_number: newQueueNumber })
+                  .eq('id', bookings[i].id);
+                
+                console.log(`Auto-updated booking ${bookings[i].id} to queue number ${newQueueNumber}`);
+              }
+            }
+          }
+        }
+      }
+      
+      // Refresh data if fixes were applied
+      if (needsFix) {
+        console.log('Queue numbers auto-fixed, refreshing data...');
+        await refetchDoctorQueues();
+      }
+      
+    } catch (error) {
+      console.error('Error in auto-fix queue numbers:', error);
+    }
+  };
+
   // Test queue system function
   const handleTestQueueSystem = async () => {
     if (!clinicSession?.medical_center?.id) return;
@@ -557,6 +630,69 @@ const ClinicDashboard = () => {
       toast({
         title: "خطأ في الاختبار",
         description: "حدث خطأ أثناء اختبار نظام الطابور",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Fix existing queue numbers function
+  const handleFixQueueNumbers = async () => {
+    if (!clinicSession?.medical_center?.id) return;
+    
+    try {
+      toast({
+        title: "إصلاح أرقام الطابور",
+        description: "جاري إصلاح أرقام الطابور الموجودة...",
+      });
+
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Fix each doctor's queue
+      for (const doctorQueue of doctorQueues) {
+        // Get all bookings for this doctor today
+        const { data: bookings, error } = await supabase
+          .from('bookings')
+          .select('id, queue_number, created_at')
+          .eq('medical_center_id', clinicSession.medical_center.id)
+          .eq('doctor_id', doctorQueue.doctor_id)
+          .eq('booking_date', today)
+          .in('status', ['pending', 'confirmed', 'in_progress'])
+          .order('created_at', { ascending: true });
+
+        if (error) {
+          console.error('Error fetching bookings for reorganization:', error);
+          continue;
+        }
+
+        if (bookings && bookings.length > 0) {
+          // Reorganize queue numbers sequentially
+          for (let i = 0; i < bookings.length; i++) {
+            const newQueueNumber = i + 1;
+            if (bookings[i].queue_number !== newQueueNumber) {
+              await supabase
+                .from('bookings')
+                .update({ queue_number: newQueueNumber })
+                .eq('id', bookings[i].id);
+              
+              console.log(`Updated booking ${bookings[i].id} to queue number ${newQueueNumber}`);
+            }
+          }
+        }
+      }
+      
+      toast({
+        title: "تم الإصلاح",
+        description: "تم إصلاح جميع أرقام الطابور",
+      });
+      
+      // Refresh the data
+      await refetchDoctorQueues();
+      
+    } catch (error) {
+      console.error('Error fixing queue numbers:', error);
+      toast({
+        title: "خطأ في الإصلاح",
+        description: "حدث خطأ أثناء إصلاح أرقام الطابور",
         variant: "destructive",
       });
     }
@@ -711,15 +847,10 @@ const ClinicDashboard = () => {
                     <RefreshCw className={`h-4 w-4 ${(doctorQueuesLoading || bookingsLoading) ? 'animate-spin' : ''}`} />
                     تحديث
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleTestQueueSystem}
-                    className="flex items-center gap-2"
-                  >
-                    <Zap className="h-4 w-4" />
-                    اختبار النظام
-                  </Button>
+                  <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-1 rounded-full">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    إصلاح تلقائي نشط
+                  </div>
                 </div>
               </div>
 

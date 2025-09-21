@@ -298,35 +298,61 @@ export const useBookings = () => {
       if (doctorId) {
         console.log('Getting queue number for doctor:', doctorId, 'on date:', bookingDate);
         
-        // Try the safe function first
-        const { data: doctorQueueNumber, error: queueError } = await (supabase as any)
-          .rpc('get_next_doctor_queue_number_safe', {
-            p_medical_center_id: bookingData.medical_center_id,
-            p_doctor_id: doctorId,
-            p_booking_date: bookingDate
-          });
-        
-        if (queueError) {
-          console.error('Error getting doctor queue number with safe function:', queueError);
-          // Fallback to regular function
-          const { data: fallbackNumber, error: fallbackError } = await (supabase as any)
-            .rpc('get_next_doctor_queue_number', {
-              p_medical_center_id: bookingData.medical_center_id,
-              p_doctor_id: doctorId,
-              p_booking_date: bookingDate
-            });
+      // Auto-fix existing queue numbers first, then calculate new number
+      const { data: existingBookings, error: existingError } = await supabase
+        .from('bookings')
+        .select('id, queue_number, created_at')
+        .eq('medical_center_id', bookingData.medical_center_id)
+        .eq('doctor_id', doctorId)
+        .eq('booking_date', bookingDate)
+        .in('status', ['pending', 'confirmed', 'in_progress'])
+        .order('created_at', { ascending: true }); // Order by creation time for fairness
+      
+      let queueNumbers: number[] = [];
+      if (existingError) {
+        console.error('Error fetching existing bookings:', existingError);
+        nextQueueNumber = 1;
+      } else {
+        // Auto-fix existing queue numbers if needed
+        if (existingBookings && existingBookings.length > 0) {
+          let needsFix = false;
           
-          if (fallbackError) {
-            console.error('Error getting doctor queue number with fallback:', fallbackError);
-            nextQueueNumber = 1;
-          } else {
-            nextQueueNumber = fallbackNumber || 1;
+          // Check if queue numbers are sequential
+          for (let i = 0; i < existingBookings.length; i++) {
+            const expectedQueueNumber = i + 1;
+            if (existingBookings[i].queue_number !== expectedQueueNumber) {
+              needsFix = true;
+              break;
+            }
           }
+          
+          // Auto-fix if needed
+          if (needsFix) {
+            console.log('Auto-fixing existing queue numbers before creating new booking');
+            for (let i = 0; i < existingBookings.length; i++) {
+              const newQueueNumber = i + 1;
+              if (existingBookings[i].queue_number !== newQueueNumber) {
+                await supabase
+                  .from('bookings')
+                  .update({ queue_number: newQueueNumber })
+                  .eq('id', existingBookings[i].id);
+              }
+            }
+          }
+          
+          // Calculate next queue number
+          queueNumbers = existingBookings.map(b => b.queue_number);
+          nextQueueNumber = existingBookings.length + 1;
         } else {
-          nextQueueNumber = doctorQueueNumber || 1;
+          nextQueueNumber = 1;
         }
-        
-        console.log('Doctor queue number:', nextQueueNumber);
+      }
+      
+      console.log('Auto-fixed queue and calculated new number:', {
+        existingBookings: existingBookings?.length || 0,
+        queueNumbers: queueNumbers,
+        nextQueueNumber: nextQueueNumber
+      });
       } else {
         console.log('Getting general queue number for medical center:', bookingData.medical_center_id, 'on date:', bookingDate);
         // Use general queue number if no doctor

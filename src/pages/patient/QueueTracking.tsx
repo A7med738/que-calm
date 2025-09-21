@@ -48,52 +48,33 @@ const QueueTracking = () => {
         // console.log('QueueTracking: Booking data fetched successfully:', bookingData);
       setBooking(bookingData);
 
-      // Calculate the patient's actual position in the doctor's queue using the new function
+      // Calculate the patient's actual position in the doctor's queue manually
       const today = new Date().toISOString().split('T')[0];
       
-      // Use the new function to get accurate queue position
-      const { data: queuePositionData, error: queuePositionError } = await supabase
-        .rpc('get_patient_queue_position', {
-          p_booking_id: bookingId
-        });
+      // Manual calculation to ensure accurate queue position
+      const { data: doctorQueueData, error: doctorQueueError } = await supabase
+        .from('bookings')
+        .select('id, queue_number, status, patient_id, created_at')
+        .eq('medical_center_id', bookingData.medical_center_id)
+        .eq('doctor_id', bookingData.doctor_id)
+        .eq('booking_date', today)
+        .in('status', ['pending', 'confirmed', 'in_progress'])
+        .order('created_at', { ascending: true });
 
-      if (queuePositionError) {
-        console.warn('QueueTracking: Error fetching queue position:', queuePositionError);
-        // Fallback to manual calculation
-        const { data: doctorQueueData, error: doctorQueueError } = await supabase
-          .from('bookings')
-          .select('id, queue_number, status, patient_id, created_at')
-          .eq('medical_center_id', bookingData.medical_center_id)
-          .eq('doctor_id', bookingData.doctor_id)
-          .eq('booking_date', today)
-          .in('status', ['pending', 'confirmed', 'in_progress'])
-          .order('created_at', { ascending: true });
-
-        if (doctorQueueError) {
-          console.warn('QueueTracking: Error fetching doctor queue data:', doctorQueueError);
-          setMyNumber(bookingData.queue_number);
-        } else {
-          // Find the patient's position in the doctor's queue
-          const patientIndex = doctorQueueData?.findIndex(booking => booking.id === bookingId);
-          const patientPosition = patientIndex + 1;
-          setMyNumber(patientPosition || bookingData.queue_number);
-          
-          console.log('Queue position calculation (fallback):', {
-            bookingId,
-            doctorQueueData: doctorQueueData?.map(b => ({ id: b.id, queue_number: b.queue_number, status: b.status, created_at: b.created_at })),
-            patientIndex,
-            patientPosition,
-            originalQueueNumber: bookingData.queue_number
-          });
-        }
+      if (doctorQueueError) {
+        console.warn('QueueTracking: Error fetching doctor queue data:', doctorQueueError);
+        setMyNumber(bookingData.queue_number);
       } else {
-        // Use the accurate position from the function
-        const positionData = queuePositionData?.[0];
-        setMyNumber(positionData?.patient_position || bookingData.queue_number);
+        // Find the patient's position in the doctor's queue
+        const patientIndex = doctorQueueData?.findIndex(booking => booking.id === bookingId);
+        const patientPosition = patientIndex + 1;
+        setMyNumber(patientPosition || bookingData.queue_number);
         
-        console.log('Queue position calculation (accurate):', {
+        console.log('Queue position calculation (manual):', {
           bookingId,
-          positionData,
+          doctorQueueData: doctorQueueData?.map(b => ({ id: b.id, queue_number: b.queue_number, status: b.status, created_at: b.created_at })),
+          patientIndex,
+          patientPosition,
           originalQueueNumber: bookingData.queue_number
         });
       }
@@ -125,11 +106,61 @@ const QueueTracking = () => {
   useEffect(() => {
     fetchBookingData();
     
-    // Set up real-time updates
-    const interval = setInterval(fetchBookingData, 5000); // Update every 5 seconds
+    // Set up real-time updates with auto-fix
+    const interval = setInterval(() => {
+      fetchBookingData();
+      handleAutoFixQueuePosition();
+    }, 5000); // Update every 5 seconds
     
     return () => clearInterval(interval);
   }, [fetchBookingData]);
+
+  // Auto-fix queue position function
+  const handleAutoFixQueuePosition = async () => {
+    if (!bookingId) return;
+    
+    try {
+      const { data: bookingData, error } = await supabase
+        .from('bookings')
+        .select('medical_center_id, doctor_id, queue_number, created_at')
+        .eq('id', bookingId)
+        .single();
+
+      if (error || !bookingData) return;
+
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Get all bookings for this doctor today
+      const { data: doctorQueueData, error: doctorQueueError } = await supabase
+        .from('bookings')
+        .select('id, queue_number, status, patient_id, created_at')
+        .eq('medical_center_id', bookingData.medical_center_id)
+        .eq('doctor_id', bookingData.doctor_id)
+        .eq('booking_date', today)
+        .in('status', ['pending', 'confirmed', 'in_progress'])
+        .order('created_at', { ascending: true });
+
+      if (doctorQueueError || !doctorQueueData) return;
+
+      // Find the patient's position in the doctor's queue
+      const patientIndex = doctorQueueData.findIndex(booking => booking.id === bookingId);
+      const patientPosition = patientIndex + 1;
+      
+      // Auto-fix if position is wrong
+      if (patientPosition !== bookingData.queue_number) {
+        console.log(`Auto-fixing queue position: ${bookingData.queue_number} -> ${patientPosition}`);
+        await supabase
+          .from('bookings')
+          .update({ queue_number: patientPosition })
+          .eq('id', bookingId);
+        
+        setMyNumber(patientPosition);
+      }
+      
+    } catch (error) {
+      console.error('Error in auto-fix queue position:', error);
+    }
+  };
 
   const waitingCount = Math.max(0, myNumber - currentNumber);
   const progress = myNumber > 0 ? Math.min(100, (currentNumber / myNumber) * 100) : 0;
