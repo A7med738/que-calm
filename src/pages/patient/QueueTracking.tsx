@@ -53,6 +53,12 @@ const QueueTracking = () => {
       
       // Use the queue_number directly from the booking - it should be correct
       // The queue_number is calculated correctly in useBookings.ts
+      console.log('🎯 Setting queue number from booking data:', {
+        bookingId: bookingId,
+        queue_number: bookingData.queue_number,
+        doctor_id: bookingData.doctor_id,
+        medical_center_id: bookingData.medical_center_id
+      });
       setMyNumber(bookingData.queue_number);
       
       // Also fetch all bookings for this doctor to show waiting count

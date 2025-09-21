@@ -298,10 +298,16 @@ export const useBookings = () => {
       if (doctorId) {
         console.log('Getting queue number for doctor:', doctorId, 'on date:', bookingDate);
         
-      // Auto-fix existing queue numbers first, then calculate new number
+      // Get all existing bookings for this doctor today
+      console.log('🔍 Fetching existing bookings for:', {
+        medical_center_id: bookingData.medical_center_id,
+        doctor_id: doctorId,
+        booking_date: bookingDate
+      });
+      
       const { data: existingBookings, error: existingError } = await supabase
         .from('bookings')
-        .select('id, queue_number, created_at')
+        .select('id, queue_number, created_at, patient_id, status')
         .eq('medical_center_id', bookingData.medical_center_id)
         .eq('doctor_id', doctorId)
         .eq('booking_date', bookingDate)
@@ -310,11 +316,21 @@ export const useBookings = () => {
       
       let queueNumbers: number[] = [];
       if (existingError) {
-        console.error('Error fetching existing bookings:', existingError);
+        console.error('❌ Error fetching existing bookings:', existingError);
         nextQueueNumber = 1;
       } else {
+        console.log('✅ Found existing bookings:', existingBookings?.length || 0);
+        
         // Auto-fix existing queue numbers if needed
         if (existingBookings && existingBookings.length > 0) {
+          console.log('📋 Existing bookings details:', existingBookings.map(b => ({
+            id: b.id,
+            queue_number: b.queue_number,
+            patient_id: b.patient_id,
+            status: b.status,
+            created_at: b.created_at
+          })));
+          
           let needsFix = false;
           
           // Check if queue numbers are sequential
@@ -322,16 +338,18 @@ export const useBookings = () => {
             const expectedQueueNumber = i + 1;
             if (existingBookings[i].queue_number !== expectedQueueNumber) {
               needsFix = true;
+              console.log(`🔧 Queue number mismatch: booking ${existingBookings[i].id} has ${existingBookings[i].queue_number}, expected ${expectedQueueNumber}`);
               break;
             }
           }
           
           // Auto-fix if needed
           if (needsFix) {
-            console.log('Auto-fixing existing queue numbers before creating new booking');
+            console.log('🔧 Auto-fixing existing queue numbers before creating new booking');
             for (let i = 0; i < existingBookings.length; i++) {
               const newQueueNumber = i + 1;
               if (existingBookings[i].queue_number !== newQueueNumber) {
+                console.log(`🔧 Updating booking ${existingBookings[i].id} from ${existingBookings[i].queue_number} to ${newQueueNumber}`);
                 await supabase
                   .from('bookings')
                   .update({ queue_number: newQueueNumber })
@@ -343,8 +361,10 @@ export const useBookings = () => {
           // Calculate next queue number
           queueNumbers = existingBookings.map(b => b.queue_number);
           nextQueueNumber = existingBookings.length + 1;
+          console.log(`📊 Calculated next queue number: ${nextQueueNumber} (based on ${existingBookings.length} existing bookings)`);
         } else {
           nextQueueNumber = 1;
+          console.log('📊 No existing bookings found, starting with queue number 1');
         }
       }
       
