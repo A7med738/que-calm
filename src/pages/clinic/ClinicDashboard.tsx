@@ -16,6 +16,7 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { useClinicBookings } from "@/hooks/useClinicBookings";
 import { useDoctorQueues, DoctorQueue, DoctorQueuePatient } from "@/hooks/useDoctorQueues";
 import { supabase } from "@/integrations/supabase/client";
+import { testQueueSystem, reorganizeQueueForDoctor, getQueueStatistics } from "@/utils/queueTestUtils";
 
 // Helper function to calculate remaining turns
 const calculateRemainingTurns = (currentQueueNumber: number, waitingBookings: any[]) => {
@@ -178,7 +179,9 @@ const ClinicDashboard = () => {
       doctorQueues: doctorQueues.map(q => ({
         doctor: q.doctor_name,
         waiting: q.waiting_patients,
-        completed: q.completed_patients
+        completed: q.completed_patients,
+        current: q.current_patient_queue_number,
+        next: q.next_queue_number
       }))
     });
   }, [doctorQueues]);
@@ -502,6 +505,63 @@ const ClinicDashboard = () => {
     navigate('/clinic/auth');
   };
 
+  // Test queue system function
+  const handleTestQueueSystem = async () => {
+    if (!clinicSession?.medical_center?.id) return;
+    
+    try {
+      toast({
+        title: "اختبار النظام",
+        description: "جاري اختبار نظام الطابور...",
+      });
+
+      // Test each doctor's queue
+      for (const doctorQueue of doctorQueues) {
+        const result = await testQueueSystem(clinicSession.medical_center.id, doctorQueue.doctor_id);
+        
+        if (!result.success) {
+          toast({
+            title: "مشكلة في الطابور",
+            description: `مشكلة في طابور د. ${doctorQueue.doctor_name}: ${result.message}`,
+            variant: "destructive",
+          });
+          
+          // Try to reorganize the queue
+          const reorganizeResult = await reorganizeQueueForDoctor(
+            clinicSession.medical_center.id,
+            doctorQueue.doctor_id,
+            new Date().toISOString().split('T')[0]
+          );
+          
+          if (reorganizeResult.success) {
+            toast({
+              title: "تم إصلاح الطابور",
+              description: `تم إعادة تنظيم طابور د. ${doctorQueue.doctor_name}`,
+            });
+          }
+        } else {
+          console.log(`Queue test passed for Dr. ${doctorQueue.doctor_name}:`, result.data);
+        }
+      }
+      
+      toast({
+        title: "تم الاختبار",
+        description: "تم اختبار جميع طوابير الأطباء",
+      });
+      
+      // Refresh the data
+      await refetchDoctorQueues();
+      
+    } catch (error) {
+      console.error('Error testing queue system:', error);
+      toast({
+        title: "خطأ في الاختبار",
+        description: "حدث خطأ أثناء اختبار نظام الطابور",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Get real data from bookings
       const currentBooking = getCurrentBooking();
       const waitingBookings = getWaitingBookings();
@@ -650,6 +710,15 @@ const ClinicDashboard = () => {
                   >
                     <RefreshCw className={`h-4 w-4 ${(doctorQueuesLoading || bookingsLoading) ? 'animate-spin' : ''}`} />
                     تحديث
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleTestQueueSystem}
+                    className="flex items-center gap-2"
+                  >
+                    <Zap className="h-4 w-4" />
+                    اختبار النظام
                   </Button>
                 </div>
               </div>

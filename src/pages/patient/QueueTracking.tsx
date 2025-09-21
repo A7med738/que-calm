@@ -48,34 +48,52 @@ const QueueTracking = () => {
         // console.log('QueueTracking: Booking data fetched successfully:', bookingData);
       setBooking(bookingData);
 
-      // Calculate the patient's actual position in the doctor's queue
+      // Calculate the patient's actual position in the doctor's queue using the new function
       const today = new Date().toISOString().split('T')[0];
       
-      // Get all patients in the same doctor's queue for today
-      const { data: doctorQueueData, error: doctorQueueError } = await supabase
-        .from('bookings')
-        .select('id, queue_number, status, patient_id')
-        .eq('medical_center_id', bookingData.medical_center_id)
-        .eq('doctor_id', bookingData.doctor_id)
-        .eq('booking_date', today)
-        .in('status', ['pending', 'confirmed', 'in_progress'])
-        .order('queue_number', { ascending: true });
+      // Use the new function to get accurate queue position
+      const { data: queuePositionData, error: queuePositionError } = await supabase
+        .rpc('get_patient_queue_position', {
+          p_booking_id: bookingId
+        });
 
-      if (doctorQueueError) {
-        console.warn('QueueTracking: Error fetching doctor queue data:', doctorQueueError);
-        // Fallback to original queue number
-        setMyNumber(bookingData.queue_number);
+      if (queuePositionError) {
+        console.warn('QueueTracking: Error fetching queue position:', queuePositionError);
+        // Fallback to manual calculation
+        const { data: doctorQueueData, error: doctorQueueError } = await supabase
+          .from('bookings')
+          .select('id, queue_number, status, patient_id, created_at')
+          .eq('medical_center_id', bookingData.medical_center_id)
+          .eq('doctor_id', bookingData.doctor_id)
+          .eq('booking_date', today)
+          .in('status', ['pending', 'confirmed', 'in_progress'])
+          .order('created_at', { ascending: true });
+
+        if (doctorQueueError) {
+          console.warn('QueueTracking: Error fetching doctor queue data:', doctorQueueError);
+          setMyNumber(bookingData.queue_number);
+        } else {
+          // Find the patient's position in the doctor's queue
+          const patientIndex = doctorQueueData?.findIndex(booking => booking.id === bookingId);
+          const patientPosition = patientIndex + 1;
+          setMyNumber(patientPosition || bookingData.queue_number);
+          
+          console.log('Queue position calculation (fallback):', {
+            bookingId,
+            doctorQueueData: doctorQueueData?.map(b => ({ id: b.id, queue_number: b.queue_number, status: b.status, created_at: b.created_at })),
+            patientIndex,
+            patientPosition,
+            originalQueueNumber: bookingData.queue_number
+          });
+        }
       } else {
-        // Find the patient's position in the doctor's queue
-        const patientIndex = doctorQueueData?.findIndex(booking => booking.id === bookingId);
-        const patientPosition = patientIndex + 1;
-        setMyNumber(patientPosition || bookingData.queue_number);
+        // Use the accurate position from the function
+        const positionData = queuePositionData?.[0];
+        setMyNumber(positionData?.patient_position || bookingData.queue_number);
         
-        console.log('Queue position calculation:', {
+        console.log('Queue position calculation (accurate):', {
           bookingId,
-          doctorQueueData: doctorQueueData?.map(b => ({ id: b.id, queue_number: b.queue_number, status: b.status })),
-          patientIndex,
-          patientPosition,
+          positionData,
           originalQueueNumber: bookingData.queue_number
         });
       }

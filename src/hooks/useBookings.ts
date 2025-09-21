@@ -296,22 +296,39 @@ export const useBookings = () => {
       // Get next queue number for the specific doctor (or general if no doctor)
       let nextQueueNumber = 1;
       if (doctorId) {
-        // console.log('Getting queue number for doctor:', doctorId, 'on date:', bookingDate);
+        console.log('Getting queue number for doctor:', doctorId, 'on date:', bookingDate);
+        
+        // Try the safe function first
         const { data: doctorQueueNumber, error: queueError } = await (supabase as any)
-          .rpc('get_next_doctor_queue_number', {
+          .rpc('get_next_doctor_queue_number_safe', {
             p_medical_center_id: bookingData.medical_center_id,
             p_doctor_id: doctorId,
             p_booking_date: bookingDate
           });
         
         if (queueError) {
-          console.error('Error getting doctor queue number:', queueError);
+          console.error('Error getting doctor queue number with safe function:', queueError);
+          // Fallback to regular function
+          const { data: fallbackNumber, error: fallbackError } = await (supabase as any)
+            .rpc('get_next_doctor_queue_number', {
+              p_medical_center_id: bookingData.medical_center_id,
+              p_doctor_id: doctorId,
+              p_booking_date: bookingDate
+            });
+          
+          if (fallbackError) {
+            console.error('Error getting doctor queue number with fallback:', fallbackError);
+            nextQueueNumber = 1;
+          } else {
+            nextQueueNumber = fallbackNumber || 1;
+          }
+        } else {
+          nextQueueNumber = doctorQueueNumber || 1;
         }
         
-        nextQueueNumber = doctorQueueNumber || 1;
-        // console.log('Doctor queue number:', nextQueueNumber);
+        console.log('Doctor queue number:', nextQueueNumber);
       } else {
-        // console.log('Getting general queue number for medical center:', bookingData.medical_center_id, 'on date:', bookingDate);
+        console.log('Getting general queue number for medical center:', bookingData.medical_center_id, 'on date:', bookingDate);
         // Use general queue number if no doctor
         const { data: generalQueueNumber, error: generalQueueError } = await (supabase as any)
           .rpc('get_next_queue_number', {
@@ -324,7 +341,7 @@ export const useBookings = () => {
         }
         
         nextQueueNumber = generalQueueNumber || 1;
-        // console.log('General queue number:', nextQueueNumber);
+        console.log('General queue number:', nextQueueNumber);
       }
 
       // Generate QR code

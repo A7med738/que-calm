@@ -55,18 +55,18 @@ export const useDoctorQueues = (medicalCenterId: string) => {
           p_booking_date: today
         });
 
-      // console.log('Main function result:', { data: data?.length || 0, error });
+      console.log('Main function result:', { data: data?.length || 0, error });
 
       // If no data or error, try fallback function
       if (!data || data.length === 0 || error) {
-        // console.log('Trying fallback function for doctor queues...');
+        console.log('Trying fallback function for doctor queues...');
         const fallbackResult = await supabase
           .rpc('get_medical_center_doctor_queues_fallback', {
             p_medical_center_id: medicalCenterId,
             p_booking_date: today
           });
         
-        // console.log('Fallback function result:', { data: fallbackResult.data?.length || 0, error: fallbackResult.error });
+        console.log('Fallback function result:', { data: fallbackResult.data?.length || 0, error: fallbackResult.error });
         
         if (fallbackResult.data && fallbackResult.data.length > 0) {
           data = fallbackResult.data;
