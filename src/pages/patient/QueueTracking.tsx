@@ -70,12 +70,21 @@ const QueueTracking = () => {
         const patientPosition = patientIndex + 1;
         setMyNumber(patientPosition || bookingData.queue_number);
         
-        console.log('Queue position calculation (manual):', {
+        console.log('🔍 Queue position calculation (manual):', {
           bookingId,
-          doctorQueueData: doctorQueueData?.map(b => ({ id: b.id, queue_number: b.queue_number, status: b.status, created_at: b.created_at })),
+          doctorId: bookingData.doctor_id,
+          medicalCenterId: bookingData.medical_center_id,
+          doctorQueueData: doctorQueueData?.map(b => ({ 
+            id: b.id, 
+            queue_number: b.queue_number, 
+            status: b.status, 
+            created_at: b.created_at,
+            patient_id: b.patient_id
+          })),
           patientIndex,
           patientPosition,
-          originalQueueNumber: bookingData.queue_number
+          originalQueueNumber: bookingData.queue_number,
+          totalPatientsInQueue: doctorQueueData?.length || 0
         });
       }
 

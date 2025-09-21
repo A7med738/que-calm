@@ -348,10 +348,18 @@ export const useBookings = () => {
         }
       }
       
-      console.log('Auto-fixed queue and calculated new number:', {
+      console.log('🔍 Queue calculation for doctor:', {
+        doctorId: doctorId,
+        medicalCenterId: bookingData.medical_center_id,
+        bookingDate: bookingDate,
         existingBookings: existingBookings?.length || 0,
         queueNumbers: queueNumbers,
-        nextQueueNumber: nextQueueNumber
+        nextQueueNumber: nextQueueNumber,
+        allBookings: existingBookings?.map(b => ({ 
+          id: b.id, 
+          queue_number: b.queue_number, 
+          created_at: b.created_at 
+        }))
       });
       } else {
         console.log('Getting general queue number for medical center:', bookingData.medical_center_id, 'on date:', bookingDate);
